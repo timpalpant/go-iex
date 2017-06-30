@@ -1,6 +1,7 @@
 # go-iex
 A Go library for accessing the IEX Developer API.
 
+[![GoDoc](https://godoc.org/github.com/timpalpant/go-iex?status.svg)](http://godoc.org/github.com/timpalpant/go-iex)
 [![Build Status](https://travis-ci.org/timpalpant/go-iex.svg?branch=master)](https://travis-ci.org/timpalpant/go-iex)
 [![Coverage Status](https://coveralls.io/repos/timpalpant/go-iex/badge.svg?branch=master&service=github)](https://coveralls.io/github/timpalpant/go-iex?branch=master)
 
