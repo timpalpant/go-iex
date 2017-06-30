@@ -292,6 +292,60 @@ func (c *Client) GetSymbols() ([]*Symbol, error) {
 	return result, err
 }
 
+func (c *Client) GetIntradayStats() (*IntradayStats, error) {
+	var result *IntradayStats
+	err := c.getJSON("/stats/intraday", nil, &result)
+	return result, err
+}
+
+// This call will return a minimum of the last five trading days up
+// to all trading days of the current month.
+func (c *Client) GetRecentStats() ([]*Stats, error) {
+	var result []*Stats
+	err := c.getJSON("/stats/recent", nil, &result)
+	return result, err
+}
+
+// Historical data is only available for prior months,
+// starting with January 2014.
+// If date IsZero(), returns the prior month's data.
+func (c *Client) GetHistoricalSummary(date time.Time) (*HistoricalSummary, error) {
+	req := &historicalSummaryRequest{}
+	if !date.IsZero() {
+		req.Date = date.Format("20060102")
+	}
+
+	var result *HistoricalSummary
+	err := c.getJSON("/stats/historical", req, &result)
+	return result, err
+}
+
+type historicalSummaryRequest struct {
+	Date string `url:",omitempty"`
+}
+
+// This call will return daily stats for a given month or day.
+// Historical data is only available for prior months, starting with January 2014.
+func (c *Client) GetHistoricalDaily(req *HistoricalDailyRequest) ([]*Stats, error) {
+	var result []*Stats
+	err := c.getJSON("/stats/historical/daily", nil, &result)
+	return result, err
+}
+
+type HistoricalDailyRequest struct {
+	// Option 1: Value needs to be in four-digit year, two-digit
+	// month format (YYYYMM) (i.e January 2017 would be written as 201701)
+	//
+	// Option 2: Value needs to be in four-digit year, two-digit month,
+	// two-digit day format (YYYYMMDD) (i.e January 21, 2017 would be
+	// written as 20170121).
+	Date string `url:",omitempty"`
+
+	// Is used in place of date to retrieve last n number of trading days.
+	// Value can only be a number up to 90.
+	Last int `url:",omitempty"`
+}
+
 func (c *Client) getJSON(route string, request interface{}, response interface{}) error {
 	url := c.endpoint(route)
 

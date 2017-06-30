@@ -297,3 +297,117 @@ type Symbol struct {
 	// Will be true if the symbol is enabled for trading on IEX.
 	IsEnabled bool
 }
+
+type IntradayStats struct {
+	// Refers to single counted shares matched from executions on IEX.
+	Volume struct {
+		Value       int
+		LastUpdated Time
+	}
+	// Refers to number of symbols traded on IEX.
+	SymbolsTraded struct {
+		Value       int
+		LastUpdated Time
+	}
+	// Refers to executions received from order routed to away trading centers.
+	RoutedVolume struct {
+		Value       int
+		LastUpdated Time
+	}
+	// Refers to sum of matched volume times execution price of those trades.
+	Notional struct {
+		Value       int
+		LastUpdated Time
+	}
+	// Refers to IEX’s percentage of total US Equity market volume.
+	MarketShare struct {
+		Value       float64
+		LastUpdated Time
+	}
+}
+
+type Stats struct {
+	// Refers to the trading day.
+	Date string
+	// Refers to executions received from order routed to away trading centers.
+	Volume int
+	// Refers to single counted shares matched from executions on IEX.
+	RoutedVolume int
+	// Refers to IEX’s percentage of total US Equity market volume.
+	MarketShare float64
+	// Will be true if the trading day is a half day.
+	IsHalfDay bool
+	// Refers to the number of lit shares traded on IEX (single-counted).
+	LitVolume int
+}
+
+type Records struct {
+	// Refers to single counted shares matched from executions on IEX.
+	Volume *Record
+	// Refers to number of symbols traded on IEX.
+	SymbolsTraded *Record
+	// Refers to executions received from order routed to away trading centers.
+	RoutedVolume *Record
+	// Refers to sum of matched volume times execution price of those trades.
+	Notional *Record
+}
+
+type Record struct {
+	Value            int    `json:"recordValue"`
+	Date             string `json:"recordDate"`
+	PreviousDayValue int
+	Avg30Value       float64
+}
+
+type HistoricalSummary struct {
+	AverageDailyVolume          float64
+	AverageDailyRoutedVolume    float64
+	AverageMarketShare          float64
+	AverageOrderSize            float64
+	AverageFillSize             float64
+	Bin100Percent               float64
+	Bin101Percent               float64
+	Bin200Percent               float64
+	Bin300Percent               float64
+	Bin400Percent               float64
+	Bin500Percent               float64
+	Bin1000Percent              float64
+	Bin5000Percent              float64
+	Bin10000Percent             float64
+	Bin10000Trades              float64
+	Bin20000Trades              float64
+	Bin50000Trades              float64
+	UniqueSymbolsTraded         float64
+	BlockPercent                float64
+	SelfCrossPercent            float64
+	ETFPercent                  float64
+	LargeCapPercent             float64
+	MidCapPercent               float64
+	SmallCapPercent             float64
+	VenueARCXFirstWaveWeight    float64
+	VenueBATSFirstWaveWeight    float64
+	VenueBATYFirstWaveWeight    float64
+	VenueEDGAFirstWaveWeight    float64
+	VenueEDGXFirstWaveWeight    float64
+	VenueOverallFirstWaveWeight float64
+	VenueXASEFirstWaveWeight    float64
+	VenueXBOSFirstWaveWeight    float64
+	VenueXCHIFirstWaveWeight    float64
+	VenueXCISFirstWaveWeight    float64
+	VenueXNGSFirstWaveWeight    float64
+	VenueXNYSFirstWaveWeight    float64
+	VenueXPHLFirstWaveWeight    float64
+	VenueARCXFirstWaveRate      float64
+	VenueBATSFirstWaveRate      float64
+	VenueBATYFirstWaveRate      float64
+	VenueEDGAFirstWaveRate      float64
+	VenueEDGXFirstWaveRate      float64
+	VenueOverallFirstWaveRate   float64
+	VenueXASEFirstWaveRate      float64
+	VenueXBOSFirstWaveRate      float64
+	VenueXCHIFirstWaveRate      float64
+	VenueXCISFirstWaveRate      float64
+	VenueXNGSFirstWaveRate      float64
+	VenueXNYSFirstWaveRate      float64
+	VenueXPHLFirstWaveRate      float64
+}
