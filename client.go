@@ -31,7 +31,7 @@ func NewClient(client *http.Client) *Client {
 func (c *Client) GetTOPS(symbols []string) ([]*TOPS, error) {
 	req := &topsRequest{symbols}
 	var result []*TOPS
-	err := c.getJSON("/tops", req, result)
+	err := c.getJSON("/tops", req, &result)
 	return result, err
 }
 
