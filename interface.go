@@ -199,7 +199,7 @@ type DEEP struct {
 	TradingStatus *TradingStatusMessage
 	OpHaltStatus  *OpHaltStatus
 	SSRStatus     *SSRStatus
-	SecurityEvent *SecurityEvent
+	SecurityEvent *SecurityEventMessage
 	Trades        []*Trade
 	TradeBreaks   []*TradeBreak
 }

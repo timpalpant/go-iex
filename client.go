@@ -60,8 +60,7 @@ type lastRequest struct {
 // HIST will provide the output of IEX data products for download on
 // a T+1 basis. Data will remain available for the trailing twelve months.
 //
-// If date is provided, then only data for that day will be returned.
-// If date IsZero(), then the data available for all dates will be returned.
+// Only data for the given day will be returned.
 func (c *Client) GetHIST(date time.Time) ([]*HIST, error) {
 	req := &histRequest{}
 	if !date.IsZero() {
@@ -74,7 +73,15 @@ func (c *Client) GetHIST(date time.Time) ([]*HIST, error) {
 }
 
 type histRequest struct {
-	Date string `url:",omitempty"`
+	Date string `url:"date,omitempty"`
+}
+
+// GetAllAvailableHIST returns HIST data for all available dates.
+// Returns a map of date string "20060102" -> HIST data for that date.
+func (c *Client) GetAllAvailableHIST() (map[string][]*HIST, error) {
+	var result map[string][]*HIST
+	err := c.getJSON("/hist", nil, &result)
+	return result, err
 }
 
 // DEEP is used to receive real-time depth of book quotations direct from IEX.
@@ -95,7 +102,7 @@ func (c *Client) GetDEEP(symbol string) (*DEEP, error) {
 }
 
 type deepRequest struct {
-	Symbols string
+	Symbols string `url:"symbols"`
 }
 
 // Book shows IEX’s bids and asks for given symbols.
@@ -127,7 +134,7 @@ func (c *Client) GetTrades(symbols []string, last int) (map[string][]*Trade, err
 
 type tradesRequest struct {
 	Symbols []string `url:"symbols,comma,omitempty"`
-	Last    int      `url:",omitempty"`
+	Last    int      `url:"last,omitempty"`
 }
 
 // The System event message is used to indicate events that apply to
@@ -271,7 +278,7 @@ func (c *Client) GetTradeBreaks(symbols []string, last int) (map[string][]*Trade
 
 type tradeBreaksRequest struct {
 	Symbols []string `url:"symbols,comma,omitempty"`
-	Last    int      `url:",omitempty"`
+	Last    int      `url:"last,omitempty"`
 }
 
 // This endpoint returns near real time traded volume on the markets.
@@ -321,7 +328,7 @@ func (c *Client) GetHistoricalSummary(date time.Time) (*HistoricalSummary, error
 }
 
 type historicalSummaryRequest struct {
-	Date string `url:",omitempty"`
+	Date string `url:"date,omitempty"`
 }
 
 // This call will return daily stats for a given month or day.
@@ -339,11 +346,11 @@ type HistoricalDailyRequest struct {
 	// Option 2: Value needs to be in four-digit year, two-digit month,
 	// two-digit day format (YYYYMMDD) (i.e January 21, 2017 would be
 	// written as 20170121).
-	Date string `url:",omitempty"`
+	Date string `url:"date,omitempty"`
 
 	// Is used in place of date to retrieve last n number of trading days.
 	// Value can only be a number up to 90.
-	Last int `url:",omitempty"`
+	Last int `url:"last,omitempty"`
 }
 
 func (c *Client) getJSON(route string, request interface{}, response interface{}) error {
