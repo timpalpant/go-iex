@@ -2,6 +2,7 @@ package iextp
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -150,10 +151,13 @@ func (s *Scanner) Scan() bool {
 	// Unmarshal segment header.
 	header := SegmentHeader{}
 	if err := header.Unmarshal(s.reader); err != nil {
-		s.err = err
+		if err != io.EOF {
+			s.err = err
+		}
 		return false
 	}
 
+	// Check that the protocol matches.
 	if header.MessageProtocolID != s.protocol.ID() {
 		s.err = fmt.Errorf(
 			"Incorrect segment protocol id: segment %v != protocol %v",
@@ -161,44 +165,56 @@ func (s *Scanner) Scan() bool {
 		return false
 	}
 
+	// Read the payload.
+	buf := make([]byte, header.PayloadLength)
+	_, err := io.ReadFull(s.reader, buf)
+	if err != nil {
+		if err == io.EOF {
+			// Shouldn't hit an EOF while reading payload.
+			s.err = io.ErrUnexpectedEOF
+		} else {
+			s.err = err
+		}
+		return false
+	}
+
 	// Unmarshal segment messages.
 	segment := &Segment{
 		Header:   header,
-		Messages: make([]Message, 0, header.MessageCount),
+		Messages: make([]Message, header.MessageCount),
 	}
-	more := true
+
+	cur := uint16(0) // Current position in buf.
 	for i := uint16(0); i < segment.Header.MessageCount; i++ {
-		var messageLength uint16
-		if err := binary.Read(s.reader, binary.LittleEndian, &messageLength); err != nil {
-			s.err = err
+		if int(cur+2) > len(buf) {
+			s.err = errors.New("invalid segment: message exceeds payload length")
 			return false
 		}
 
-		buf := make([]byte, messageLength)
-		if _, err := io.ReadFull(s.reader, buf); err != nil {
-			s.err = err
+		// Messages are variable-length depending on their type.
+		// Get the length of the next message in the segment.
+		messageLength := binary.LittleEndian.Uint16(buf[cur : cur+2])
+		cur += 2
+
+		if int(cur+messageLength) > len(buf) {
+			s.err = errors.New("invalid segment: message exceeds payload length")
 			return false
 		}
 
-		msg, err := s.protocol.Unmarshal(buf)
+		// Unmarshal the message.
+		msgBuf := buf[cur : cur+messageLength]
+		cur += messageLength
+		msg, err := s.protocol.Unmarshal(msgBuf)
 		if err != nil {
-			if err != io.EOF {
-				s.err = err
-				return false
-			} else if i != segment.Header.MessageCount-1 {
-				s.err = io.ErrUnexpectedEOF
-				return false
-			} else {
-				// (Expected) EOF and end of messages.
-				more = false
-			}
+			s.err = err
+			return false
 		}
 
-		segment.Messages = append(segment.Messages, msg)
+		segment.Messages[i] = msg
 	}
 
 	s.current = segment
-	return more
+	return true
 }
 
 // Segment returns the current Segment parsed from a recent call to Scan.
