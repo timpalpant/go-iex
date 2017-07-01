@@ -5,7 +5,10 @@ install:
 - go get github.com/modocache/gover
 - go get -t ./...
 script:
-- go list -f '{{if len .TestGoFiles}}"go test -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}"{{end}}' ./... | xargs sh -c
+- go test -v -coverprofile=iex.coverprofile
+- go test -v -coverprofile=iextp.coverprofile ./iextp
+- go test -v -coverprofile=tops.coverprofile ./iextp/tops
+- go test -v -coverprofile=deep.coverprofile ./iextp/deep
 - gover
 - goveralls -coverprofile=gover.coverprofile -service=travis-ci -repotoken $COVERALLS_TOKEN
 env:
