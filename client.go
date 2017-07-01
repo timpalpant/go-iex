@@ -180,7 +180,9 @@ type systemEventRequest struct {
 //     Released into an Order Acceptance Period*
 //     Released for trading
 //
-// *The paused and released into an Order Acceptance Period status will be disseminated for IEX-listed securities only. Trading pauses on non-IEX-listed securities will be treated simply as a halt.
+// *The paused and released into an Order Acceptance Period status will be
+// disseminated for IEX-listed securities only. Trading pauses on
+// non-IEX-listed securities will be treated simply as a halt.
 //
 // A maximumum of 10 symbols may be requested.
 func (c *Client) GetTradingStatus(symbols []string) (map[string]*TradingStatusMessage, error) {

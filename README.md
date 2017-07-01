@@ -32,14 +32,19 @@ func main() {
   if err != nil {
       panic(err)
   }
-  
-  quotes, err := client.GetTOPS(availableSymbols[:5])
+
+  toFetch := make([]string, 5)
+  for i := 0; i < len(toFetch); i++ {
+    toFetch[i] = availableSymbols.Symbol
+  }
+
+  quotes, err := client.GetTOPS(toFetch)
   if err != nil {
       panic(err)
   }
-  
+
   for _, quote := range quotes {
-      fmt.Fprintf("%v: bid $%.02f (%v shares), ask $%.02f (%v shares) [as of %v]",
+      fmt.Printf("%v: bid $%.02f (%v shares), ask $%.02f (%v shares) [as of %v]",
           quote.Symbol, quote.BidPrice, quote.BidSize,
           quote.AskPrice, quote.AskSize, quote.LastUpdated)
   }
