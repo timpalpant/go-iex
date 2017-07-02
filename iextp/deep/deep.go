@@ -6,7 +6,3 @@ const (
 )
 
 type Protocol struct{}
-
-func (p Protocol) ID() uint16 {
-	return MessageProtocolID
-}

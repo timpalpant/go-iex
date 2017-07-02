@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	ChannelID         uint32 = 1
-	MessageProtocolID uint16 = 0x8003
+	ChannelID               uint32 = 1
+	TOPS15MessageProtocolID uint16 = 0x8002
+	TOPS16MessageProtocolID uint16 = 0x8003
 )
 
 const (
@@ -31,12 +32,13 @@ const (
 	AuctionInformation uint8 = 0x41
 )
 
+func init() {
+	iextp.RegisterProtocol(TOPS15MessageProtocolID, Protocol{})
+	iextp.RegisterProtocol(TOPS16MessageProtocolID, Protocol{})
+}
+
 // Protocol implements the TOPS protocol, v1.6.
 type Protocol struct{}
-
-func (p Protocol) ID() uint16 {
-	return MessageProtocolID
-}
 
 func (p Protocol) Unmarshal(buf []byte) (iextp.Message, error) {
 	if len(buf) == 0 {

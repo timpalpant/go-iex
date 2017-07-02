@@ -4,14 +4,73 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
+	"sync"
 	"time"
 )
+
+// Protocol represents a higher-level IEXTP protocol, such as TOPS or DEEP.
+type Protocol interface {
+	// Unmarshal a Message received in an IEXTP segment.
+	// Note that buf contains only the message content and not the
+	// segment header.
+	Unmarshal(buf []byte) (Message, error)
+}
+
+var protocolRegistry = map[uint16]Protocol{}
+var registryMu sync.Mutex
+
+func RegisterProtocol(messageProtocolID uint16, p Protocol) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	protocolRegistry[messageProtocolID] = p
+}
 
 // Segment represents an IEXTP Segment.
 type Segment struct {
 	Header   SegmentHeader
 	Messages []Message
+}
+
+func (s *Segment) Unmarshal(buf []byte) error {
+	// Unmarshal segment header.
+	if err := s.Header.Unmarshal(buf); err != nil {
+		return err
+	}
+
+	protocol, ok := protocolRegistry[s.Header.MessageProtocolID]
+	if !ok {
+		return fmt.Errorf("unknown message protocol: %v",
+			s.Header.MessageProtocolID)
+	}
+
+	cur := uint16(40) // Current position in buf.
+	s.Messages = make([]Message, s.Header.MessageCount)
+	for i := uint16(0); i < s.Header.MessageCount; i++ {
+		if int(cur+2) > len(buf) {
+			return errors.New("invalid segment: message exceeds payload length")
+		}
+
+		// Messages are variable-length depending on their type.
+		// Get the length of the next message in the segment.
+		messageLength := binary.LittleEndian.Uint16(buf[cur : cur+2])
+		cur += 2
+
+		if int(cur+messageLength) > len(buf) {
+			return errors.New("invalid segment: message exceeds payload length")
+		}
+
+		// Unmarshal the message.
+		msgBuf := buf[cur : cur+messageLength]
+		cur += messageLength
+		msg, err := protocol.Unmarshal(msgBuf)
+		if err != nil {
+			return err
+		}
+
+		s.Messages[i] = msg
+	}
+
+	return nil
 }
 
 // Message represents an IEXTP message.
@@ -39,6 +98,8 @@ func (m *UnsupportedMessage) Unmarshal(buf []byte) error {
 type SegmentHeader struct {
 	// Version of the IEX-TP protocol.
 	Version uint8
+	// Reserved byte.
+	_ uint8
 	// A unique identifier for the higher-layer specification that describes
 	// the messages contaiend within a segment. See the higher-layer protocol
 	// specification for the protocol's message identification in IEX-TP.
@@ -53,176 +114,42 @@ type SegmentHeader struct {
 	// system. A given message is uniquely identified within a message
 	// protocol by its Session ID and Sequence Number.
 	SessionID uint32
-	// StreamOffset is a counter representing the byte offset of the payload
-	// in the data stream.
-	StreamOffset int64
 	// PayloadLength is an unsigned binary count representing the number
 	// of bytes contained in the segment's payload. Note that the Payload
 	// Length field value does not include the length of the IEX-TP
 	// header.
 	PayloadLength uint16
+	// MessageCount is a count representing the number of Message Blocks
+	// in the segment.
+	MessageCount uint16
+	// StreamOffset is a counter representing the byte offset of the payload
+	// in the data stream.
+	StreamOffset int64
 	// FirstMessageSequenceNumber is a counter representing the sequence
 	// number of the first message in the segment. If there is more than one
 	// message in a segment, all subsequent messages are implicitly
 	// numbered sequentially.
 	FirstMessageSequenceNumber int64
-	// MessageCount is a count representing the number of Message Blocks
-	// in the segment.
-	MessageCount uint16
 	// The time the outbound segment was sent as set by the sender.
 	SendTime time.Time
 }
 
-func (sh *SegmentHeader) Unmarshal(r io.Reader) error {
-	if err := binary.Read(r, binary.LittleEndian, &sh.Version); err != nil {
-		return err
+func (sh *SegmentHeader) Unmarshal(buf []byte) error {
+	if len(buf) < 40 {
+		return fmt.Errorf(
+			"cannot unmarshal SegmentHeader from %v-length buffer",
+			len(buf))
 	}
 
-	if err := binary.Read(r, binary.LittleEndian, &sh.MessageProtocolID); err != nil {
-		return err
-	}
-
-	if err := binary.Read(r, binary.LittleEndian, &sh.ChannelID); err != nil {
-		return err
-	}
-
-	if err := binary.Read(r, binary.LittleEndian, &sh.SessionID); err != nil {
-		return err
-	}
-
-	if err := binary.Read(r, binary.LittleEndian, &sh.PayloadLength); err != nil {
-		return err
-	}
-
-	if err := binary.Read(r, binary.LittleEndian, &sh.MessageCount); err != nil {
-		return err
-	}
-
-	if err := binary.Read(r, binary.LittleEndian, &sh.StreamOffset); err != nil {
-		return err
-	}
-
-	if err := binary.Read(r, binary.LittleEndian, &sh.FirstMessageSequenceNumber); err != nil {
-		return err
-	}
-
-	var timestampNs int64
-	if err := binary.Read(r, binary.LittleEndian, &timestampNs); err != nil {
-		return err
-	}
+	sh.Version = uint8(buf[0])
+	sh.MessageProtocolID = binary.LittleEndian.Uint16(buf[2:4])
+	sh.ChannelID = binary.LittleEndian.Uint32(buf[4:8])
+	sh.SessionID = binary.LittleEndian.Uint32(buf[8:12])
+	sh.PayloadLength = binary.LittleEndian.Uint16(buf[12:14])
+	sh.MessageCount = binary.LittleEndian.Uint16(buf[14:16])
+	sh.StreamOffset = int64(binary.LittleEndian.Uint64(buf[16:24]))
+	sh.FirstMessageSequenceNumber = int64(binary.LittleEndian.Uint64(buf[24:32]))
+	timestampNs := int64(binary.LittleEndian.Uint64(buf[32:40]))
 	sh.SendTime = time.Unix(0, timestampNs)
-
 	return nil
-}
-
-// Protocol represents a higher-level IEXTP protocol, such as TOPS or DEEP.
-type Protocol interface {
-	// ID returns the MessageProtocolID for this protocol.
-	// During scanning, it is an error if a Segment's MessageProtocolID
-	// does not match the one expected by the Protocol.
-	ID() uint16
-	// Unmarshal a Message received in an IEXTP segment.
-	// Note that buf contains only the message content.
-	Unmarshal(buf []byte) (Message, error)
-}
-
-// Scanner provides a convenient interface for reading IEXTP Segments
-// from a data stream. It behaves like a bufio.Scanner, advancing
-// to the next Segment with each call to Scan until EOF or an I/O error.
-type Scanner struct {
-	reader   io.Reader
-	protocol Protocol
-
-	current *Segment
-	err     error
-}
-
-func NewScanner(r io.Reader, p Protocol) *Scanner {
-	return &Scanner{reader: r, protocol: p}
-}
-
-// Scan advances the Scanner to the next segment, which will
-// then be available through the Segment method. It returns
-// false when the scan stops, either by reaching the end of
-// the input or an error. After Scan returns false, the Err
-// method will return any error that occurred during scanning,
-// except that if it was io.EOF, Err will return nil.
-func (s *Scanner) Scan() bool {
-	// Unmarshal segment header.
-	header := SegmentHeader{}
-	if err := header.Unmarshal(s.reader); err != nil {
-		if err != io.EOF {
-			s.err = err
-		}
-		return false
-	}
-
-	// Check that the protocol matches.
-	if header.MessageProtocolID != s.protocol.ID() {
-		s.err = fmt.Errorf(
-			"Incorrect segment protocol id: segment %v != protocol %v",
-			header.MessageProtocolID, s.protocol.ID())
-		return false
-	}
-
-	// Read the payload.
-	buf := make([]byte, header.PayloadLength)
-	_, err := io.ReadFull(s.reader, buf)
-	if err != nil {
-		if err == io.EOF {
-			// Shouldn't hit an EOF while reading payload.
-			s.err = io.ErrUnexpectedEOF
-		} else {
-			s.err = err
-		}
-		return false
-	}
-
-	// Unmarshal segment messages.
-	segment := &Segment{
-		Header:   header,
-		Messages: make([]Message, header.MessageCount),
-	}
-
-	cur := uint16(0) // Current position in buf.
-	for i := uint16(0); i < segment.Header.MessageCount; i++ {
-		if int(cur+2) > len(buf) {
-			s.err = errors.New("invalid segment: message exceeds payload length")
-			return false
-		}
-
-		// Messages are variable-length depending on their type.
-		// Get the length of the next message in the segment.
-		messageLength := binary.LittleEndian.Uint16(buf[cur : cur+2])
-		cur += 2
-
-		if int(cur+messageLength) > len(buf) {
-			s.err = errors.New("invalid segment: message exceeds payload length")
-			return false
-		}
-
-		// Unmarshal the message.
-		msgBuf := buf[cur : cur+messageLength]
-		cur += messageLength
-		msg, err := s.protocol.Unmarshal(msgBuf)
-		if err != nil {
-			s.err = err
-			return false
-		}
-
-		segment.Messages[i] = msg
-	}
-
-	s.current = segment
-	return true
-}
-
-// Segment returns the current Segment parsed from a recent call to Scan.
-func (s *Scanner) Segment() *Segment {
-	return s.current
-}
-
-// Err returns the first non-EOF error that was encountered by the Scanner.
-func (s *Scanner) Err() error {
-	return s.err
 }
