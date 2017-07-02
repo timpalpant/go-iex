@@ -5,6 +5,14 @@ import (
 	"time"
 )
 
+func TestUnmarshal(t *testing.T) {
+
+}
+
+func TestUnmarshal_UnknownMessageType(t *testing.T) {
+
+}
+
 func TestSystemEventMessage(t *testing.T) {
 	data := []byte{
 		0x53,                                           // S = System Event

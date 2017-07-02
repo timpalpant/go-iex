@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 )
 
@@ -15,14 +14,11 @@ import (
 type Protocol func(buf []byte) (Message, error)
 
 var protocolRegistry = map[uint16]Protocol{}
-var registryMu sync.Mutex
 
 // Register an IEXTP protocol to use for decoding Segment Messages.
-// Should be called at init time by packages that implement
+// RegisterProtocol should be called at init time by packages that implement
 // IEXTP protocols, such as TOPS and DEEP.
 func RegisterProtocol(messageProtocolID uint16, p Protocol) {
-	registryMu.Lock()
-	defer registryMu.Unlock()
 	protocolRegistry[messageProtocolID] = p
 }
 
