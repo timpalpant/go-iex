@@ -181,6 +181,14 @@ func TestQuoteUpdateMessage(t *testing.T) {
 	if msg != expected {
 		t.Fatalf("parsed: %v, expected: %v", msg, expected)
 	}
+
+	if !msg.IsActive() {
+		t.Error("message flags should be active")
+	}
+
+	if !msg.IsRegularMarketSession() {
+		t.Error("message flags should indicate regular market session")
+	}
 }
 
 func TestTradeReportMessage(t *testing.T) {
@@ -211,6 +219,38 @@ func TestTradeReportMessage(t *testing.T) {
 
 	if msg != expected {
 		t.Fatalf("parsed: %v, expected: %v", msg, expected)
+	}
+
+	if msg.IsISO() {
+		t.Error("message should be non-ISO")
+	}
+
+	if msg.IsExtendedHoursTrade() {
+		t.Error("message is a regular-hours trade")
+	}
+
+	if msg.IsOddLot() {
+		t.Error("message is a regular or mixed lot")
+	}
+
+	if msg.IsTradeThroughExempt() {
+		t.Error("message is trade-through exempt")
+	}
+
+	if msg.IsSinglePriceCrossTrade() {
+		t.Error("message is not single-price cross trade")
+	}
+
+	if !msg.IsLastSaleEligible() {
+		t.Error("message is last sale eligible")
+	}
+
+	if !msg.IsHighLowPriceEligible() {
+		t.Error("message is high-low pice eligible")
+	}
+
+	if !msg.IsVolumeEligible() {
+		t.Error("message is volume eligible")
 	}
 }
 
