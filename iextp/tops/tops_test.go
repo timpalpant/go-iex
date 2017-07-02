@@ -18,6 +18,7 @@ func TestSystemEventMessage(t *testing.T) {
 	}
 
 	expected := SystemEventMessage{
+		MessageType: SystemEvent,
 		SystemEvent: EndOfSystemHours,
 		Timestamp:   time.Date(2017, time.April, 17, 17, 0, 0, 0, time.UTC),
 	}
@@ -44,6 +45,7 @@ func TestSecurityDirectoryMessage(t *testing.T) {
 	}
 
 	expected := SecurityDirectoryMessage{
+		MessageType:      SecurityDirectory,
 		Flags:            0x80,
 		Timestamp:        time.Date(2017, time.April, 17, 07, 40, 0, 0, time.UTC),
 		Symbol:           "ZIEXT",
@@ -82,6 +84,7 @@ func TestTradingStatusMessage(t *testing.T) {
 	}
 
 	expected := TradingStatusMessage{
+		MessageType:   TradingStatus,
 		TradingStatus: TradingHalt,
 		// NOTE: The TOPS specification says 2016-08-23 15:30:32.572715948,
 		// but that is incorrect (probably not UTC).
@@ -109,6 +112,7 @@ func TestOperationalHaltStatusMessage(t *testing.T) {
 	}
 
 	expected := OperationalHaltStatusMessage{
+		MessageType:           OperationalHaltStatus,
 		OperationalHaltStatus: IEXSpecificOperationalHalt,
 		Timestamp:             time.Date(2016, time.August, 23, 19, 30, 32, 572715948, time.UTC),
 		Symbol:                "ZIEXT",
@@ -134,6 +138,7 @@ func TestShortSalePriceTestStatusMessage(t *testing.T) {
 	}
 
 	expected := ShortSalePriceTestStatusMessage{
+		MessageType:              ShortSalePriceTestStatus,
 		ShortSalePriceTestStatus: true,
 		Timestamp:                time.Date(2016, time.August, 23, 19, 30, 32, 572715948, time.UTC),
 		Symbol:                   "ZIEXT",
@@ -163,13 +168,14 @@ func TestQuoteUpdateMessage(t *testing.T) {
 	}
 
 	expected := QuoteUpdateMessage{
-		Flags:     0,
-		Timestamp: time.Date(2016, time.August, 23, 19, 30, 32, 572715948, time.UTC),
-		Symbol:    "ZIEXT",
-		BidSize:   9700,
-		BidPrice:  99.05,
-		AskPrice:  99.07,
-		AskSize:   1000,
+		MessageType: QuoteUpdate,
+		Flags:       0,
+		Timestamp:   time.Date(2016, time.August, 23, 19, 30, 32, 572715948, time.UTC),
+		Symbol:      "ZIEXT",
+		BidSize:     9700,
+		BidPrice:    99.05,
+		AskPrice:    99.07,
+		AskSize:     1000,
 	}
 
 	if msg != expected {
@@ -194,6 +200,7 @@ func TestTradeReportMessage(t *testing.T) {
 	}
 
 	expected := TradeReportMessage{
+		MessageType:        TradeReport,
 		SaleConditionFlags: 0,
 		Timestamp:          time.Date(2016, time.August, 23, 19, 30, 32, 572715948, time.UTC),
 		Symbol:             "ZIEXT",
@@ -224,6 +231,7 @@ func TestTradeBreakMessage(t *testing.T) {
 	}
 
 	expected := TradeBreakMessage{
+		MessageType:        TradeBreak,
 		SaleConditionFlags: 0,
 		Timestamp:          time.Date(2016, time.August, 23, 19, 32, 04, 912754610, time.UTC),
 		Symbol:             "ZIEXT",
@@ -266,6 +274,7 @@ func TestAuctionInformationMessage(t *testing.T) {
 	}
 
 	expected := AuctionInformationMessage{
+		MessageType:              AuctionInformation,
 		AuctionType:              ClosingAuction,
 		Timestamp:                time.Date(2017, time.April, 17, 15, 50, 12, 462929885, time.UTC),
 		Symbol:                   "ZIEXT",
