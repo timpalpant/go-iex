@@ -1,9 +1,13 @@
+// pcap2json is a small binary for extracting IEXTP messages
+// from a pcap dump and converting them to JSON.
+//
+// The pcap dump is read from stdin, and may be gzipped,
+// and the resulting JSON messages are written to stdout.
 package main
 
 import (
 	"bufio"
-	"flag"
-	"fmt"
+	"encoding/json"
 	"io"
 	"log"
 	"os"
@@ -12,33 +16,21 @@ import (
 	"github.com/google/gopacket/pcapgo"
 
 	"github.com/timpalpant/go-iex/iextp"
-	"github.com/timpalpant/go-iex/iextp/tops"
+	_ "github.com/timpalpant/go-iex/iextp/deep"
+	_ "github.com/timpalpant/go-iex/iextp/tops"
 )
 
-func loadProtocol(name string) iextp.Protocol {
-	var protocol iextp.Protocol
-	switch name {
-	case "tops":
-		protocol = tops.Protocol{}
-	default:
-		log.Fatal(
-			"Unsupported protocol: %v. Options: tops, deep",
-			name)
-	}
-
-	return protocol
-}
-
 func main() {
-	flag.Parse()
-
 	input := bufio.NewReader(os.Stdin)
 	pcapReader, err := pcapgo.NewReader(input)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	packetSource := gopacket.NewPacketSource(pcapReader, pcapReader.LinkType())
+
+	output := bufio.NewWriter(os.Stdout)
+	enc := json.NewEncoder(output)
+
 	for {
 		packet, err := packetSource.NextPacket()
 		if err == io.EOF {
@@ -53,7 +45,9 @@ func main() {
 				log.Fatal(err)
 			}
 
-			fmt.Println(segment)
+			for _, msg := range segment.Messages {
+				enc.Encode(msg)
+			}
 		}
 	}
 }

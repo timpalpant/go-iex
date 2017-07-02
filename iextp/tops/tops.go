@@ -1,3 +1,4 @@
+// Package tops implements an unmarshaler for the TOPS protocol, v1.6.
 package tops
 
 import (
@@ -17,43 +18,42 @@ const (
 
 const (
 	// Administrative message formats.
-	MessageTypeSystemEvent       uint8 = 0x53
-	MessageTypeSecurityDirectory uint8 = 0x44
-	MessageTypeTradingStatus     uint8 = 0x48
-	OperationalHaltStatus        uint8 = 0x4f
-	ShortSalePriceTestStatus     uint8 = 0x50
+	SystemEvent              = 0x53
+	SecurityDirectory        = 0x44
+	TradingStatus            = 0x48
+	OperationalHaltStatus    = 0x4f
+	ShortSalePriceTestStatus = 0x50
 
 	// Trading message formats.
-	QuoteUpdate uint8 = 0x51
-	TradeReport uint8 = 0x54
-	TradeBreak  uint8 = 0x42
+	QuoteUpdate = 0x51
+	TradeReport = 0x54
+	TradeBreak  = 0x42
 
 	// Auction message formats.
-	AuctionInformation uint8 = 0x41
+	AuctionInformation = 0x41
 )
 
 func init() {
-	iextp.RegisterProtocol(TOPS15MessageProtocolID, Protocol{})
-	iextp.RegisterProtocol(TOPS16MessageProtocolID, Protocol{})
+	// This package can parse both TOPS v1.5 and TOPS v1.6.
+	iextp.RegisterProtocol(TOPS15MessageProtocolID, Unmarshal)
+	iextp.RegisterProtocol(TOPS16MessageProtocolID, Unmarshal)
 }
 
-// Protocol implements the TOPS protocol, v1.6.
-type Protocol struct{}
-
-func (p Protocol) Unmarshal(buf []byte) (iextp.Message, error) {
+// Implements the TOPS protocol, v1.6.
+func Unmarshal(buf []byte) (iextp.Message, error) {
 	if len(buf) == 0 {
 		return nil, fmt.Errorf("cannot unmarshal %v-length buffer", len(buf))
 	}
 
 	var msg iextp.Message
 
-	messageType := uint8(buf[0])
+	messageType := buf[0]
 	switch messageType {
-	case MessageTypeSystemEvent:
+	case SystemEvent:
 		msg = &SystemEventMessage{}
-	case MessageTypeSecurityDirectory:
+	case SecurityDirectory:
 		msg = &SecurityDirectoryMessage{}
-	case MessageTypeTradingStatus:
+	case TradingStatus:
 		msg = &TradingStatusMessage{}
 	case OperationalHaltStatus:
 		msg = &OperationalHaltStatusMessage{}
@@ -78,7 +78,7 @@ func (p Protocol) Unmarshal(buf []byte) (iextp.Message, error) {
 // Parse the TOPS timestamp type: 8 bytes, signed integer containing
 // a counter of nanoseconds since POSIX (Epoch) time UTC,
 // into a native time.Time.
-func parseTimestamp(buf []byte) time.Time {
+func ParseTimestamp(buf []byte) time.Time {
 	timestampNs := int64(binary.LittleEndian.Uint64(buf))
 	return time.Unix(0, timestampNs).In(time.UTC)
 }
@@ -86,7 +86,7 @@ func parseTimestamp(buf []byte) time.Time {
 // Parse the TOPS event time: 4 bytes, unsigned integer containing
 // a counter of seconds since POSIX (Epoch) time UTC,
 // into a native time.Time
-func parseEventTime(buf []byte) time.Time {
+func ParseEventTime(buf []byte) time.Time {
 	timestampSecs := binary.LittleEndian.Uint32(buf)
 	return time.Unix(int64(timestampSecs), 0).In(time.UTC)
 }
@@ -94,14 +94,14 @@ func parseEventTime(buf []byte) time.Time {
 // Parse the TOPS price type: 8 bytes, signed integer containing
 // a fixed-point number with 4 digits to the right of an implied
 // decimal point, into a float64.
-func parseFloat(buf []byte) float64 {
+func ParseFloat(buf []byte) float64 {
 	n := int64(binary.LittleEndian.Uint64(buf))
 	return float64(n) / 10000
 }
 
 // Parse the TOPS string type: fixed-length ASCII byte sequence,
 // left justified and space filled on the right.
-func parseString(buf []byte) string {
+func ParseString(buf []byte) string {
 	return strings.TrimRight(string(buf), " ")
 }
 
@@ -111,6 +111,7 @@ func parseString(buf []byte) string {
 // There will be a single message disseminated per channel for each
 // System Event type within a given trading session.
 type SystemEventMessage struct {
+	MessageType uint8
 	// System event identifier.
 	SystemEvent uint8
 	// Time stamp of the system event.
@@ -124,8 +125,9 @@ func (m *SystemEventMessage) Unmarshal(buf []byte) error {
 			len(buf))
 	}
 
+	m.MessageType = uint8(buf[0])
 	m.SystemEvent = uint8(buf[1])
-	m.Timestamp = parseTimestamp(buf[2:10])
+	m.Timestamp = ParseTimestamp(buf[2:10])
 
 	return nil
 }
@@ -155,6 +157,7 @@ const (
 // all IEX-listed securities. After the pre-market spin, IEX will use the
 // SecurityDirectoryMessage to relay changes for an individual security.
 type SecurityDirectoryMessage struct {
+	MessageType uint8
 	// See Appendix A for flag values.
 	Flags uint8
 	// The time of the update event as set by the IEX Trading System logic.
@@ -181,11 +184,12 @@ func (m *SecurityDirectoryMessage) Unmarshal(buf []byte) error {
 			len(buf))
 	}
 
+	m.MessageType = uint8(buf[0])
 	m.Flags = uint8(buf[1])
-	m.Timestamp = parseTimestamp(buf[2:10])
-	m.Symbol = parseString(buf[10:18])
+	m.Timestamp = ParseTimestamp(buf[2:10])
+	m.Symbol = ParseString(buf[10:18])
 	m.RoundLotSize = binary.LittleEndian.Uint32(buf[18:22])
-	m.AdjustedPOCPrice = parseFloat(buf[22:30])
+	m.AdjustedPOCPrice = ParseFloat(buf[22:30])
 	m.LULDTier = uint8(buf[30])
 
 	return nil
@@ -241,6 +245,7 @@ const (
 // disseminated for IEX-listed securities only. Trading pauses on
 // non-IEX-listed securities will be treated simply as a halt.
 type TradingStatusMessage struct {
+	MessageType uint8
 	// Trading status.
 	TradingStatus uint8
 	// The time of the update event as set by the IEX Trading System logic.
@@ -263,10 +268,11 @@ func (m *TradingStatusMessage) Unmarshal(buf []byte) error {
 			len(buf))
 	}
 
+	m.MessageType = uint8(buf[0])
 	m.TradingStatus = uint8(buf[1])
-	m.Timestamp = parseTimestamp(buf[2:10])
-	m.Symbol = parseString(buf[10:18])
-	m.Reason = parseString(buf[18:22])
+	m.Timestamp = ParseTimestamp(buf[2:10])
+	m.Symbol = ParseString(buf[10:18])
+	m.Reason = ParseString(buf[18:22])
 	return nil
 }
 
@@ -315,6 +321,7 @@ const (
 // After the pre-market spin, IEX will use the OperationalHaltStatusMessage
 // to relay changes in operational halt status for an individual security.
 type OperationalHaltStatusMessage struct {
+	MessageType uint8
 	// Operational halt status identifier
 	OperationalHaltStatus uint8
 	// The time of the update event as set by the IEX Trading System logic.
@@ -330,9 +337,10 @@ func (m *OperationalHaltStatusMessage) Unmarshal(buf []byte) error {
 			len(buf))
 	}
 
+	m.MessageType = uint8(buf[0])
 	m.OperationalHaltStatus = uint8(buf[1])
-	m.Timestamp = parseTimestamp(buf[2:10])
-	m.Symbol = parseString(buf[10:18])
+	m.Timestamp = ParseTimestamp(buf[2:10])
+	m.Symbol = ParseString(buf[10:18])
 	return nil
 }
 
@@ -353,6 +361,7 @@ const (
 // The IEX Trading system will process orders based on the latest short sale
 // price test restriction status.
 type ShortSalePriceTestStatusMessage struct {
+	MessageType uint8
 	// Whether or not the ShortSalePriceTest is in effect.
 	ShortSalePriceTestStatus bool
 	// The time of the update as set by the IEX Trading System logic.
@@ -372,9 +381,10 @@ func (m *ShortSalePriceTestStatusMessage) Unmarshal(buf []byte) error {
 			len(buf))
 	}
 
+	m.MessageType = uint8(buf[0])
 	m.ShortSalePriceTestStatus = (uint8(buf[1]) != 0)
-	m.Timestamp = parseTimestamp(buf[2:10])
-	m.Symbol = parseString(buf[10:18])
+	m.Timestamp = ParseTimestamp(buf[2:10])
+	m.Symbol = ParseString(buf[10:18])
 	m.Detail = uint8(buf[18])
 	return nil
 }
@@ -398,7 +408,8 @@ const (
 // of trading, IEX publishes a "zero quote" (Bid Price, Bid Size, Ask Price,
 // and Ask Size are zero) for all symbols in the IEX trading system.
 type QuoteUpdateMessage struct {
-	Flags uint8
+	MessageType uint8
+	Flags       uint8
 	// The time an event triggered the quote update as set by the IEX Trading
 	// System logic.
 	Timestamp time.Time
@@ -421,12 +432,13 @@ func (m *QuoteUpdateMessage) Unmarshal(buf []byte) error {
 			len(buf))
 	}
 
+	m.MessageType = uint8(buf[0])
 	m.Flags = uint8(buf[1])
-	m.Timestamp = parseTimestamp(buf[2:10])
-	m.Symbol = parseString(buf[10:18])
+	m.Timestamp = ParseTimestamp(buf[2:10])
+	m.Symbol = ParseString(buf[10:18])
 	m.BidSize = binary.LittleEndian.Uint32(buf[18:22])
-	m.BidPrice = parseFloat(buf[22:30])
-	m.AskPrice = parseFloat(buf[30:38])
+	m.BidPrice = ParseFloat(buf[22:30])
+	m.AskPrice = ParseFloat(buf[30:38])
 	m.AskSize = binary.LittleEndian.Uint32(buf[38:42])
 	return nil
 }
@@ -443,6 +455,7 @@ func (m *QuoteUpdateMessage) IsRegularMarketSession() bool {
 // is executed in whole or in part. TOPS sends a TradeReportMessage
 // for every individual fill.
 type TradeReportMessage struct {
+	MessageType        uint8
 	SaleConditionFlags uint8
 	// The time an event triggered the trade (i.e., execution) as set
 	// by the IEX Trading System logic.
@@ -465,11 +478,12 @@ func (m *TradeReportMessage) Unmarshal(buf []byte) error {
 			len(buf))
 	}
 
+	m.MessageType = uint8(buf[0])
 	m.SaleConditionFlags = uint8(buf[1])
-	m.Timestamp = parseTimestamp(buf[2:10])
-	m.Symbol = parseString(buf[10:18])
+	m.Timestamp = ParseTimestamp(buf[2:10])
+	m.Symbol = ParseString(buf[10:18])
 	m.Size = binary.LittleEndian.Uint32(buf[18:22])
-	m.Price = parseFloat(buf[22:30])
+	m.Price = ParseFloat(buf[22:30])
 	m.TradeID = int64(binary.LittleEndian.Uint64(buf[30:38]))
 	return nil
 }
@@ -515,6 +529,7 @@ func (m *TradeReportMessage) IsVolumeEligible() bool {
 // on that same trading day. Trade breaks are rare and only affect
 // applications that rely upon IEX execution based data.
 type TradeBreakMessage struct {
+	MessageType        uint8
 	SaleConditionFlags uint8
 	// The time an event triggered the trade (i.e., execution) as set
 	// by the IEX Trading System logic.
@@ -537,11 +552,12 @@ func (m *TradeBreakMessage) Unmarshal(buf []byte) error {
 			len(buf))
 	}
 
+	m.MessageType = uint8(buf[0])
 	m.SaleConditionFlags = uint8(buf[1])
-	m.Timestamp = parseTimestamp(buf[2:10])
-	m.Symbol = parseString(buf[10:18])
+	m.Timestamp = ParseTimestamp(buf[2:10])
+	m.Symbol = ParseString(buf[10:18])
 	m.Size = binary.LittleEndian.Uint32(buf[18:22])
-	m.Price = parseFloat(buf[22:30])
+	m.Price = ParseFloat(buf[22:30])
 	m.TradeID = int64(binary.LittleEndian.Uint64(buf[30:38]))
 	return nil
 }
@@ -551,6 +567,7 @@ func (m *TradeBreakMessage) Unmarshal(buf []byte) error {
 // and during the Display Only Period for IPO, Halt, and Volatility Auctions.
 // Only IEX-listed securities are eligible for IEX Auctions.
 type AuctionInformationMessage struct {
+	MessageType uint8
 	AuctionType uint8
 	// The time of the update event as set by the IEX Trading System logic.
 	Timestamp time.Time
@@ -591,20 +608,21 @@ func (m *AuctionInformationMessage) Unmarshal(buf []byte) error {
 			len(buf))
 	}
 
+	m.MessageType = uint8(buf[0])
 	m.AuctionType = uint8(buf[1])
-	m.Timestamp = parseTimestamp(buf[2:10])
-	m.Symbol = parseString(buf[10:18])
+	m.Timestamp = ParseTimestamp(buf[2:10])
+	m.Symbol = ParseString(buf[10:18])
 	m.PairedShares = binary.LittleEndian.Uint32(buf[18:22])
-	m.ReferencePrice = parseFloat(buf[22:30])
-	m.IndicativeClearingPrice = parseFloat(buf[30:38])
+	m.ReferencePrice = ParseFloat(buf[22:30])
+	m.IndicativeClearingPrice = ParseFloat(buf[30:38])
 	m.ImbalanceShares = binary.LittleEndian.Uint32(buf[38:42])
 	m.ImbalanceSide = uint8(buf[42])
 	m.ExtensionNumber = uint8(buf[43])
-	m.ScheduledAuctionTime = parseEventTime(buf[44:48])
-	m.AuctionBookClearingPrice = parseFloat(buf[48:56])
-	m.CollarReferencePrice = parseFloat(buf[56:64])
-	m.LowerAuctionCollar = parseFloat(buf[64:72])
-	m.UpperAuctionCollar = parseFloat(buf[72:80])
+	m.ScheduledAuctionTime = ParseEventTime(buf[44:48])
+	m.AuctionBookClearingPrice = ParseFloat(buf[48:56])
+	m.CollarReferencePrice = ParseFloat(buf[56:64])
+	m.LowerAuctionCollar = ParseFloat(buf[64:72])
+	m.UpperAuctionCollar = ParseFloat(buf[72:80])
 	return nil
 }
 

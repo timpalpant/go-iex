@@ -9,16 +9,17 @@ import (
 )
 
 // Protocol represents a higher-level IEXTP protocol, such as TOPS or DEEP.
-type Protocol interface {
-	// Unmarshal a Message received in an IEXTP segment.
-	// Note that buf contains only the message content and not the
-	// segment header.
-	Unmarshal(buf []byte) (Message, error)
-}
+// A Protocol unmarshals a Message received in an IEXTP segment.
+// Note that buf contains only the message content and not the
+// segment header.
+type Protocol func(buf []byte) (Message, error)
 
 var protocolRegistry = map[uint16]Protocol{}
 var registryMu sync.Mutex
 
+// Register an IEXTP protocol to use for decoding Segment Messages.
+// Should be called at init time by packages that implement
+// IEXTP protocols, such as TOPS and DEEP.
 func RegisterProtocol(messageProtocolID uint16, p Protocol) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
@@ -47,7 +48,8 @@ func (s *Segment) Unmarshal(buf []byte) error {
 	s.Messages = make([]Message, s.Header.MessageCount)
 	for i := uint16(0); i < s.Header.MessageCount; i++ {
 		if int(cur+2) > len(buf) {
-			return errors.New("invalid segment: message exceeds payload length")
+			return errors.New(
+				"invalid segment: message exceeds payload length")
 		}
 
 		// Messages are variable-length depending on their type.
@@ -56,13 +58,14 @@ func (s *Segment) Unmarshal(buf []byte) error {
 		cur += 2
 
 		if int(cur+messageLength) > len(buf) {
-			return errors.New("invalid segment: message exceeds payload length")
+			return errors.New(
+				"invalid segment: message exceeds payload length")
 		}
 
 		// Unmarshal the message.
 		msgBuf := buf[cur : cur+messageLength]
 		cur += messageLength
-		msg, err := protocol.Unmarshal(msgBuf)
+		msg, err := protocol(msgBuf)
 		if err != nil {
 			return err
 		}
