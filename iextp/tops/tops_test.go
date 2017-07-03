@@ -1,16 +1,64 @@
 package tops
 
 import (
+	"reflect"
 	"testing"
 	"time"
+
+	"github.com/timpalpant/go-iex/iextp"
 )
 
 func TestUnmarshal(t *testing.T) {
+	data := []byte{
+		0x53,                                           // S = System Event
+		0x45,                                           // End of System Hours
+		0x00, 0xa0, 0x99, 0x97, 0xe9, 0x3d, 0xb6, 0x14, // 2017-04-17 17:00:00
+	}
 
+	msg, err := Unmarshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	systemEventMsg, ok := msg.(*SystemEventMessage)
+	if !ok {
+		t.Fatal("expected to decode SystemEventMessage")
+	}
+
+	expected := SystemEventMessage{
+		MessageType: SystemEvent,
+		SystemEvent: EndOfSystemHours,
+		Timestamp:   time.Date(2017, time.April, 17, 17, 0, 0, 0, time.UTC),
+	}
+
+	if *systemEventMsg != expected {
+		t.Fatalf("parsed: %v, expected: %v", msg, expected)
+	}
 }
 
 func TestUnmarshal_UnknownMessageType(t *testing.T) {
+	data := []byte{0x02} // Not a known message type.
+	msg, err := Unmarshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	unkMsg, ok := msg.(*iextp.UnsupportedMessage)
+	if !ok {
+		t.Fatal("expected to decode UnsupportedMessage")
+	}
+
+	if !reflect.DeepEqual([]byte(*unkMsg), data) {
+		t.Fatal("message data not equal to input")
+	}
+}
+
+func TestUnmarshal_Empty(t *testing.T) {
+	data := []byte{}
+	_, err := Unmarshal(data)
+	if err.Error() != "cannot unmarshal 0-length buffer" {
+		t.Fatal("expected unmarshal error")
+	}
 }
 
 func TestSystemEventMessage(t *testing.T) {
