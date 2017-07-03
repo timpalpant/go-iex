@@ -1,13 +1,9 @@
-// Package iextp_test is a test-only package to allow testing of the iextp
-// package using the TOPS and DEEP protocols, without creating an import cycle.
-package iextp_test
+package iextp
 
 import (
+	"os"
 	"testing"
 	"time"
-
-	"github.com/timpalpant/go-iex/iextp"
-	"github.com/timpalpant/go-iex/iextp/deep"
 )
 
 var header = []byte{
@@ -45,15 +41,28 @@ var payload = []byte{
 	0x24, 0x1d, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, // $99.05
 }
 
+// testUnmarshal is unmarshals all messages into UnsupportedMessage,
+// a simulated higher-level protocol for testing IEX-TP.
+func testUnmarshal(buf []byte) (Message, error) {
+	msg := &UnsupportedMessage{}
+	err := msg.Unmarshal(buf)
+	return msg, err
+}
+
+func TestMain(m *testing.M) {
+	RegisterProtocol(0x8004, testUnmarshal)
+	os.Exit(m.Run())
+}
+
 func TestUnmarshalSegmentHeader(t *testing.T) {
-	h := iextp.SegmentHeader{}
+	h := SegmentHeader{}
 	if err := h.Unmarshal(header); err != nil {
 		t.Fatal(err)
 	}
 
-	expected := iextp.SegmentHeader{
+	expected := SegmentHeader{
 		Version:                    1,
-		MessageProtocolID:          deep.V_1_0_MessageProtocolID,
+		MessageProtocolID:          0x8004,
 		ChannelID:                  1,
 		SessionID:                  1116143616,
 		PayloadLength:              72,
@@ -73,23 +82,13 @@ func TestUnmarshalSegment(t *testing.T) {
 	data = append(data, header...)
 	data = append(data, payload...)
 
-	var segment iextp.Segment
+	var segment Segment
 	if err := segment.Unmarshal(data); err != nil {
 		t.Fatal(err)
 	}
 
 	if len(segment.Messages) != 2 {
 		t.Fatalf("should have unmarshaled 2 messages, got %v", len(segment.Messages))
-	}
-
-	msg0 := segment.Messages[0]
-	if _, ok := msg0.(*deep.TradeReportMessage); !ok {
-		t.Fatal("expected to unmarshal TradeReportMessage")
-	}
-
-	msg1 := segment.Messages[1]
-	if _, ok := msg1.(*deep.PriceLevelUpdateMessage); !ok {
-		t.Fatal("expected to unmarshal PriceLevelUpdateMessage")
 	}
 }
 
@@ -107,7 +106,7 @@ func TestUnmarshalSegment_UnknownProtocol(t *testing.T) {
 		0xec, 0x45, 0xc2, 0x20, 0x96, 0x86, 0x6d, 0x14, // 2016-08-23 15:30:32.572839404
 	}
 
-	var segment iextp.Segment
+	var segment Segment
 	if err := segment.Unmarshal(data); err == nil {
 		t.Fatal("expected unknown protocol")
 	} else if err.Error() != "unknown message protocol: 4112" {
@@ -118,7 +117,7 @@ func TestUnmarshalSegment_UnknownProtocol(t *testing.T) {
 func TestUnmarshalSegment_Empty(t *testing.T) {
 	data := []byte{}
 
-	var segment iextp.Segment
+	var segment Segment
 	if err := segment.Unmarshal(data); err == nil {
 		t.Fatal("expected error")
 	} else if err.Error() != "cannot unmarshal SegmentHeader from 0-length buffer" {
@@ -133,7 +132,7 @@ func TestUnmarshalSegment_TooShort(t *testing.T) {
 		0x04, 0x80, // DEEP v1.0
 	}
 
-	var segment iextp.Segment
+	var segment Segment
 	if err := segment.Unmarshal(data); err == nil {
 		t.Fatal("expected error")
 	} else if err.Error() != "cannot unmarshal SegmentHeader from 4-length buffer" {
@@ -155,7 +154,7 @@ func TestUnmarshalSegment_NoMessages(t *testing.T) {
 		0xec, 0x45, 0xc2, 0x20, 0x96, 0x86, 0x6d, 0x14, // 2016-08-23 15:30:32.572839404
 	}
 
-	var segment iextp.Segment
+	var segment Segment
 	if err := segment.Unmarshal(data); err != nil {
 		t.Fatal(err)
 	}

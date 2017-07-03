@@ -8,7 +8,7 @@ install:
 - go get -t ./...
 script:
 - go test -v -coverprofile=iex.coverprofile
-- go test -v -coverprofile=iextp.coverprofile ./iextp/test
+- go test -v -coverprofile=iextp.coverprofile ./iextp
 - go test -v -coverprofile=tops.coverprofile ./iextp/tops
 - go test -v -coverprofile=deep.coverprofile ./iextp/deep
 - gover
