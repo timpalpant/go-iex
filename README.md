@@ -15,6 +15,15 @@ and does not endorse or recommend this library.
 
 ## Usage
 
+### pcap2json
+
+If you just need a tool to convert the provided pcap data files into JSON, you can use the included `pcap2json` tool:
+
+```
+$ go install github.com/timpalpant/go-iex/pcap2json
+$ pcap2json < input.pcap > output.json
+```
+
 ### Fetch real-time top-of-book quotes
 
 ```Go
@@ -29,6 +38,11 @@ import (
 
 func main() {
   client := iex.NewClient(&http.Client{})
+
+  quotes, err := client.GetTOPS([]string{"AAPL", "SPY"})
+  if err != nil {
+      panic(err)
+  }
 
   for _, quote := range quotes {
       fmt.Printf("%v: bid $%.02f (%v shares), ask $%.02f (%v shares) [as of %v]\n",
