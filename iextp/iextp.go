@@ -149,6 +149,6 @@ func (sh *SegmentHeader) Unmarshal(buf []byte) error {
 	sh.StreamOffset = int64(binary.LittleEndian.Uint64(buf[16:24]))
 	sh.FirstMessageSequenceNumber = int64(binary.LittleEndian.Uint64(buf[24:32]))
 	timestampNs := int64(binary.LittleEndian.Uint64(buf[32:40]))
-	sh.SendTime = time.Unix(0, timestampNs)
+	sh.SendTime = time.Unix(0, timestampNs).In(time.UTC)
 	return nil
 }
