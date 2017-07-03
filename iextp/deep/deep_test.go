@@ -88,6 +88,14 @@ func TestPriceLevelUpdateMessage_BuySide(t *testing.T) {
 	if pluMsg != expected {
 		t.Fatalf("parsed: %v, expected: %v", msg, expected)
 	}
+
+	if !pluMsg.IsBuySide() {
+		t.Fatal("message is buy side")
+	}
+
+	if pluMsg.IsSellSide() {
+		t.Fatal("message is buy side")
+	}
 }
 
 func TestPriceLevelUpdateMessage_SellSide(t *testing.T) {
@@ -117,5 +125,13 @@ func TestPriceLevelUpdateMessage_SellSide(t *testing.T) {
 
 	if pluMsg != expected {
 		t.Fatalf("parsed: %v, expected: %v", msg, expected)
+	}
+
+	if pluMsg.IsBuySide() {
+		t.Fatal("message is sell side")
+	}
+
+	if !pluMsg.IsSellSide() {
+		t.Fatal("message is sell side")
 	}
 }
