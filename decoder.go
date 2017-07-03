@@ -11,8 +11,8 @@ import (
 	_ "github.com/timpalpant/go-iex/iextp/tops"
 )
 
-// PcapScanner is a high-level reader for the pcap dumps provided
-// by IEX in the HIST endpoint.
+// PcapScanner is a high-level reader for extracting messages from the
+// pcap dumps provided by IEX in the HIST endpoint.
 type PcapScanner struct {
 	packetSource    *gopacket.PacketSource
 	currentSegment  []iextp.Message
@@ -32,7 +32,7 @@ func NewPcapScanner(r io.Reader) (*PcapScanner, error) {
 }
 
 // Get the next Message in the pcap dump.
-func (p *PcapScanner) NextMessage() (iextp.Message, error) {
+func (p *PcapScanner) NextSegment() (iextp.Message, error) {
 	for p.currentMsgIndex >= len(p.currentSegment) {
 		if err := p.nextSegment(); err != nil {
 			return nil, err
