@@ -8,34 +8,6 @@ import (
 	"github.com/timpalpant/go-iex/iextp"
 )
 
-func TestUnmarshal(t *testing.T) {
-	data := []byte{
-		0x53,                                           // S = System Event
-		0x45,                                           // End of System Hours
-		0x00, 0xa0, 0x99, 0x97, 0xe9, 0x3d, 0xb6, 0x14, // 2017-04-17 17:00:00
-	}
-
-	msg, err := Unmarshal(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	systemEventMsg, ok := msg.(*SystemEventMessage)
-	if !ok {
-		t.Fatal("expected to decode SystemEventMessage")
-	}
-
-	expected := SystemEventMessage{
-		MessageType: SystemEvent,
-		SystemEvent: EndOfSystemHours,
-		Timestamp:   time.Date(2017, time.April, 17, 17, 0, 0, 0, time.UTC),
-	}
-
-	if *systemEventMsg != expected {
-		t.Fatalf("parsed: %v, expected: %v", msg, expected)
-	}
-}
-
 func TestUnmarshal_UnknownMessageType(t *testing.T) {
 	data := []byte{0x02} // Not a known message type.
 	msg, err := Unmarshal(data)
@@ -68,8 +40,8 @@ func TestSystemEventMessage(t *testing.T) {
 		0x00, 0xa0, 0x99, 0x97, 0xe9, 0x3d, 0xb6, 0x14, // 2017-04-17 17:00:00
 	}
 
-	msg := SystemEventMessage{}
-	if err := msg.Unmarshal(data); err != nil {
+	msg, err := Unmarshal(data)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -79,7 +51,7 @@ func TestSystemEventMessage(t *testing.T) {
 		Timestamp:   time.Date(2017, time.April, 17, 17, 0, 0, 0, time.UTC),
 	}
 
-	if msg != expected {
+	if *msg.(*SystemEventMessage) != expected {
 		t.Fatalf("parsed: %v, expected: %v", msg, expected)
 	}
 }
@@ -95,11 +67,12 @@ func TestSecurityDirectoryMessage(t *testing.T) {
 		0x01, // Tier 1 NMS Stock
 	}
 
-	msg := SecurityDirectoryMessage{}
-	if err := msg.Unmarshal(data); err != nil {
+	msg, err := Unmarshal(data)
+	if err != nil {
 		t.Fatal(err)
 	}
 
+	sdMsg := *msg.(*SecurityDirectoryMessage)
 	expected := SecurityDirectoryMessage{
 		MessageType:      SecurityDirectory,
 		Flags:            0x80,
@@ -110,17 +83,17 @@ func TestSecurityDirectoryMessage(t *testing.T) {
 		LULDTier:         LULDTier1,
 	}
 
-	if msg != expected {
+	if sdMsg != expected {
 		t.Fatalf("parsed: %v, expected: %v", msg, expected)
 	}
 
-	if !msg.IsTestSecurity() {
+	if !sdMsg.IsTestSecurity() {
 		t.Error("message should be a test security")
 	}
-	if msg.IsETP() {
+	if sdMsg.IsETP() {
 		t.Error("message should not be ETP")
 	}
-	if msg.IsWhenIssuedSecurity() {
+	if sdMsg.IsWhenIssuedSecurity() {
 		t.Error("message should not be a When Issued security")
 	}
 }
@@ -134,11 +107,12 @@ func TestTradingStatusMessage(t *testing.T) {
 		0x54, 0x31, 0x20, 0x20, // T1 = Halt News Pending
 	}
 
-	msg := TradingStatusMessage{}
-	if err := msg.Unmarshal(data); err != nil {
+	msg, err := Unmarshal(data)
+	if err != nil {
 		t.Fatal(err)
 	}
 
+	tsMsg := *msg.(*TradingStatusMessage)
 	expected := TradingStatusMessage{
 		MessageType:   TradingStatus,
 		TradingStatus: TradingHalt,
@@ -149,7 +123,7 @@ func TestTradingStatusMessage(t *testing.T) {
 		Reason:    HaltNewsPending,
 	}
 
-	if msg != expected {
+	if tsMsg != expected {
 		t.Fatalf("parsed: %v, expected: %v", msg, expected)
 	}
 }
@@ -162,11 +136,12 @@ func TestOperationalHaltStatusMessage(t *testing.T) {
 		0x5a, 0x49, 0x45, 0x58, 0x54, 0x20, 0x20, 0x20, // ZIEXT
 	}
 
-	msg := OperationalHaltStatusMessage{}
-	if err := msg.Unmarshal(data); err != nil {
+	msg, err := Unmarshal(data)
+	if err != nil {
 		t.Fatal(err)
 	}
 
+	ohsMsg := *msg.(*OperationalHaltStatusMessage)
 	expected := OperationalHaltStatusMessage{
 		MessageType:           OperationalHaltStatus,
 		OperationalHaltStatus: IEXSpecificOperationalHalt,
@@ -174,7 +149,7 @@ func TestOperationalHaltStatusMessage(t *testing.T) {
 		Symbol:                "ZIEXT",
 	}
 
-	if msg != expected {
+	if ohsMsg != expected {
 		t.Fatalf("parsed: %v, expected: %v", msg, expected)
 	}
 }
@@ -188,11 +163,12 @@ func TestShortSalePriceTestStatusMessage(t *testing.T) {
 		0x41, // Activated
 	}
 
-	msg := ShortSalePriceTestStatusMessage{}
-	if err := msg.Unmarshal(data); err != nil {
+	msg, err := Unmarshal(data)
+	if err != nil {
 		t.Fatal(err)
 	}
 
+	ssptsMsg := *msg.(*ShortSalePriceTestStatusMessage)
 	expected := ShortSalePriceTestStatusMessage{
 		MessageType:              ShortSalePriceTestStatus,
 		ShortSalePriceTestStatus: true,
@@ -201,7 +177,7 @@ func TestShortSalePriceTestStatusMessage(t *testing.T) {
 		Detail:                   ShortSalePriceTestActivated,
 	}
 
-	if msg != expected {
+	if ssptsMsg != expected {
 		t.Fatalf("parsed: %v, expected: %v", msg, expected)
 	}
 }
@@ -218,11 +194,12 @@ func TestQuoteUpdateMessage(t *testing.T) {
 		0xe8, 0x03, 0x00, 0x00, // 1,000 shares
 	}
 
-	msg := QuoteUpdateMessage{}
-	if err := msg.Unmarshal(data); err != nil {
+	msg, err := Unmarshal(data)
+	if err != nil {
 		t.Fatal(err)
 	}
 
+	quMsg := *msg.(*QuoteUpdateMessage)
 	expected := QuoteUpdateMessage{
 		MessageType: QuoteUpdate,
 		Flags:       0,
@@ -234,15 +211,15 @@ func TestQuoteUpdateMessage(t *testing.T) {
 		AskSize:     1000,
 	}
 
-	if msg != expected {
+	if quMsg != expected {
 		t.Fatalf("parsed: %v, expected: %v", msg, expected)
 	}
 
-	if !msg.IsActive() {
+	if !quMsg.IsActive() {
 		t.Error("message flags should be active")
 	}
 
-	if !msg.IsRegularMarketSession() {
+	if !quMsg.IsRegularMarketSession() {
 		t.Error("message flags should indicate regular market session")
 	}
 }
@@ -258,11 +235,12 @@ func TestTradeReportMessage(t *testing.T) {
 		0x96, 0x8f, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, // 429974
 	}
 
-	msg := TradeReportMessage{}
-	if err := msg.Unmarshal(data); err != nil {
+	msg, err := Unmarshal(data)
+	if err != nil {
 		t.Fatal(err)
 	}
 
+	trMsg := *msg.(*TradeReportMessage)
 	expected := TradeReportMessage{
 		MessageType:        TradeReport,
 		SaleConditionFlags: 0,
@@ -273,39 +251,39 @@ func TestTradeReportMessage(t *testing.T) {
 		TradeID:            429974,
 	}
 
-	if msg != expected {
+	if trMsg != expected {
 		t.Fatalf("parsed: %v, expected: %v", msg, expected)
 	}
 
-	if msg.IsISO() {
+	if trMsg.IsISO() {
 		t.Error("message should be non-ISO")
 	}
 
-	if msg.IsExtendedHoursTrade() {
+	if trMsg.IsExtendedHoursTrade() {
 		t.Error("message is a regular-hours trade")
 	}
 
-	if msg.IsOddLot() {
+	if trMsg.IsOddLot() {
 		t.Error("message is a regular or mixed lot")
 	}
 
-	if msg.IsTradeThroughExempt() {
+	if trMsg.IsTradeThroughExempt() {
 		t.Error("message is trade-through exempt")
 	}
 
-	if msg.IsSinglePriceCrossTrade() {
+	if trMsg.IsSinglePriceCrossTrade() {
 		t.Error("message is not single-price cross trade")
 	}
 
-	if !msg.IsLastSaleEligible() {
+	if !trMsg.IsLastSaleEligible() {
 		t.Error("message is last sale eligible")
 	}
 
-	if !msg.IsHighLowPriceEligible() {
+	if !trMsg.IsHighLowPriceEligible() {
 		t.Error("message is high-low pice eligible")
 	}
 
-	if !msg.IsVolumeEligible() {
+	if !trMsg.IsVolumeEligible() {
 		t.Error("message is volume eligible")
 	}
 }
@@ -321,11 +299,12 @@ func TestTradeBreakMessage(t *testing.T) {
 		0x96, 0x8f, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, // 429974
 	}
 
-	msg := TradeBreakMessage{}
-	if err := msg.Unmarshal(data); err != nil {
+	msg, err := Unmarshal(data)
+	if err != nil {
 		t.Fatal(err)
 	}
 
+	tbMsg := *msg.(*TradeBreakMessage)
 	expected := TradeBreakMessage{
 		MessageType:        TradeBreak,
 		SaleConditionFlags: 0,
@@ -336,7 +315,7 @@ func TestTradeBreakMessage(t *testing.T) {
 		TradeID:            429974,
 	}
 
-	if msg != expected {
+	if tbMsg != expected {
 		t.Fatalf("parsed: %v, expected: %v", msg, expected)
 	}
 }
@@ -364,11 +343,12 @@ func TestAuctionInformationMessage(t *testing.T) {
 		0xdc, 0x9f, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, // $108.95
 	}
 
-	msg := AuctionInformationMessage{}
-	if err := msg.Unmarshal(data); err != nil {
+	msg, err := Unmarshal(data)
+	if err != nil {
 		t.Fatal(err)
 	}
 
+	aiMsg := *msg.(*AuctionInformationMessage)
 	expected := AuctionInformationMessage{
 		MessageType:              AuctionInformation,
 		AuctionType:              ClosingAuction,
@@ -387,7 +367,7 @@ func TestAuctionInformationMessage(t *testing.T) {
 		UpperAuctionCollar:       108.95,
 	}
 
-	if msg != expected {
+	if aiMsg != expected {
 		t.Fatalf("parsed: %v, expected: %v", msg, expected)
 	}
 }
