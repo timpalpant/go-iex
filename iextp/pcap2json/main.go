@@ -12,42 +12,29 @@ import (
 	"log"
 	"os"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/pcapgo"
-
-	"github.com/timpalpant/go-iex/iextp"
-	_ "github.com/timpalpant/go-iex/iextp/deep"
-	_ "github.com/timpalpant/go-iex/iextp/tops"
+	"github.com/timpalpant/go-iex"
 )
 
 func main() {
 	input := bufio.NewReader(os.Stdin)
-	pcapReader, err := pcapgo.NewReader(input)
+	scanner, err := iex.NewPcapScanner(input)
 	if err != nil {
 		log.Fatal(err)
 	}
-	packetSource := gopacket.NewPacketSource(pcapReader, pcapReader.LinkType())
 
 	output := bufio.NewWriter(os.Stdout)
 	enc := json.NewEncoder(output)
 
 	for {
-		packet, err := packetSource.NextPacket()
-		if err == io.EOF {
-			break
-		} else if err != nil {
+		msg, err := scanner.NextMessage()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
 			log.Fatal(err)
 		}
 
-		if app := packet.ApplicationLayer(); app != nil {
-			segment := iextp.Segment{}
-			if err := segment.Unmarshal(app.Payload()); err != nil {
-				log.Fatal(err)
-			}
-
-			for _, msg := range segment.Messages {
-				enc.Encode(msg)
-			}
-		}
+		enc.Encode(msg)
 	}
 }
