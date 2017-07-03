@@ -61,7 +61,8 @@ func TestLast(t *testing.T) {
 
 func TestHIST_OneDate(t *testing.T) {
 	c := setupTestClient()
-	result, err := c.GetHIST(time.Now().Add(-48 * time.Hour))
+	testDate := time.Date(2017, time.June, 6, 0, 0, 0, 0, time.UTC)
+	result, err := c.GetHIST(testDate)
 	if err != nil {
 		t.Fatal(err)
 	}
