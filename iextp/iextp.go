@@ -4,8 +4,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 )
+
+// Size of the segment header, in bytes.
+const segmentHeaderSize uint16 = 40
 
 // Protocol represents a higher-level IEXTP protocol, such as TOPS or DEEP.
 // A Protocol unmarshals a Message received in an IEXTP segment.
@@ -34,13 +38,17 @@ func (s *Segment) Unmarshal(buf []byte) error {
 		return err
 	}
 
+	if int(s.Header.PayloadLength) != len(buf)-int(segmentHeaderSize) {
+		return io.ErrUnexpectedEOF
+	}
+
 	protocol, ok := protocolRegistry[s.Header.MessageProtocolID]
 	if !ok {
 		return fmt.Errorf("unknown message protocol: %v",
 			s.Header.MessageProtocolID)
 	}
 
-	cur := uint16(40) // Current position in buf.
+	cur := segmentHeaderSize // Current position in buf.
 	s.Messages = make([]Message, s.Header.MessageCount)
 	for i := uint16(0); i < s.Header.MessageCount; i++ {
 		if int(cur+2) > len(buf) {

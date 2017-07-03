@@ -32,7 +32,7 @@ func NewPcapScanner(r io.Reader) (*PcapScanner, error) {
 }
 
 // Get the next Message in the pcap dump.
-func (p *PcapScanner) NextSegment() (iextp.Message, error) {
+func (p *PcapScanner) NextMessage() (iextp.Message, error) {
 	for p.currentMsgIndex >= len(p.currentSegment) {
 		if err := p.nextSegment(); err != nil {
 			return nil, err
