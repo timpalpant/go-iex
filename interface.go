@@ -1,80 +1,19 @@
 package iex
 
-import (
-	"encoding/json"
-)
-
-type Feed string
-
-func (f *Feed) UnmarshalJSON(b []byte) error {
-	var s string
-	err := json.Unmarshal(b, &s)
-	*f = Feed(s)
-	return err
-}
-
-func (f *Feed) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(*f))
-}
+const IEXTP1 = "IEXTP1"
 
 const (
-	FeedDEEP Feed = "DEEP"
-	FeedTOPS Feed = "TOPS"
+	StartMessages    = "O"
+	StartSystemHours = "S"
+	StartMarketHours = "R"
+	EndMarketHours   = "M"
+	EndSystemHours   = "E"
+	EndMessages      = "C"
 )
-
-type Protocol string
-
-func (p *Protocol) UnmarshalJSON(b []byte) error {
-	var s string
-	err := json.Unmarshal(b, &s)
-	*p = Protocol(s)
-	return err
-}
-
-func (p *Protocol) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(*p))
-}
-
-const IEXTP1 Protocol = "IEXTP1"
-
-type SystemEventCode string
-
-func (sec *SystemEventCode) UnmarshalJSON(b []byte) error {
-	var s string
-	err := json.Unmarshal(b, &s)
-	*sec = SystemEventCode(s)
-	return err
-}
-
-func (sec *SystemEventCode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(*sec))
-}
-
-const (
-	StartMessages    SystemEventCode = "O"
-	StartSystemHours SystemEventCode = "S"
-	StartMarketHours SystemEventCode = "R"
-	EndMarketHours   SystemEventCode = "M"
-	EndSystemHours   SystemEventCode = "E"
-	EndMessages      SystemEventCode = "C"
-)
-
-type TradingStatus string
-
-func (ts *TradingStatus) UnmarshalJSON(b []byte) error {
-	var s string
-	err := json.Unmarshal(b, &s)
-	*ts = TradingStatus(s)
-	return err
-}
-
-func (ts *TradingStatus) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(*ts))
-}
 
 const (
 	// Trading halted across all US equity markets.
-	TradingHalted TradingStatus = "H"
+	TradingHalted = "H"
 	// Trading halt released into an Order Acceptance Period
 	// (IEX-listed securities only)
 	TradingOrderAcceptancePeriod = "O"
@@ -84,19 +23,6 @@ const (
 	// Trading on IEX
 	Trading = "T"
 )
-
-type TradingReason string
-
-func (tr *TradingReason) UnmarshalJSON(b []byte) error {
-	var s string
-	err := json.Unmarshal(b, &s)
-	*tr = TradingReason(s)
-	return err
-}
-
-func (tr *TradingReason) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(*tr))
-}
 
 const (
 	// Trading halt reasons.
@@ -114,22 +40,9 @@ const (
 	MarketCircuitBreakerLevel2       = "MCB2"
 )
 
-type SecurityEvent string
-
-func (se *SecurityEvent) UnmarshalJSON(b []byte) error {
-	var s string
-	err := json.Unmarshal(b, &s)
-	*se = SecurityEvent(s)
-	return err
-}
-
-func (se *SecurityEvent) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(*se))
-}
-
 const (
-	MarketOpen  SecurityEvent = "MarketOpen"
-	MarketClose SecurityEvent = "MarketClose"
+	MarketOpen  = "MarketOpen"
+	MarketClose = "MarketClose"
 )
 
 type TOPS struct {
@@ -176,11 +89,11 @@ type HIST struct {
 	// Date of the data contained in this file.
 	Date string
 	// Which data feed is contained in this file.
-	Feed Feed
+	Feed string
 	// The feed format specification version.
 	Version string
 	// The protocol version of the data.
-	Protocol Protocol
+	Protocol string
 	// The size, in bytes, of the data file.
 	Size int64 `json:",string"`
 }
@@ -211,13 +124,13 @@ type Quote struct {
 }
 
 type SystemEvent struct {
-	SystemEvent SystemEventCode
+	SystemEvent string
 	Timestamp   Time
 }
 
 type TradingStatusMessage struct {
-	Status    TradingStatus
-	Reason    TradingReason
+	Status    string
+	Reason    string
 	Timestamp Time
 }
 
@@ -233,7 +146,7 @@ type SSRStatus struct {
 }
 
 type SecurityEventMessage struct {
-	SecurityEvent SecurityEvent
+	SecurityEvent string
 	Timestamp     Time
 }
 

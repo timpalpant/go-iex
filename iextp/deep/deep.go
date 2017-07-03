@@ -12,7 +12,8 @@ import (
 
 const (
 	ChannelID               uint32 = 1
-	DEEP10MessageProtocolID uint16 = 0x8004
+	V_1_0_MessageProtocolID uint16 = 0x8004
+	FeedName                       = "DEEP"
 )
 
 const (
@@ -31,7 +32,7 @@ const (
 )
 
 func init() {
-	iextp.RegisterProtocol(DEEP10MessageProtocolID, Unmarshal)
+	iextp.RegisterProtocol(V_1_0_MessageProtocolID, Unmarshal)
 }
 
 // Implements the DEEP protocol, v1.0.

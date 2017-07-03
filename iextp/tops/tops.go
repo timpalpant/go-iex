@@ -12,8 +12,9 @@ import (
 
 const (
 	ChannelID               uint32 = 1
-	TOPS15MessageProtocolID uint16 = 0x8002
-	TOPS16MessageProtocolID uint16 = 0x8003
+	V_1_5_MessageProtocolID uint16 = 0x8002
+	V_1_6_MessageProtocolID uint16 = 0x8003
+	FeedName                       = "TOPS"
 )
 
 const (
@@ -35,8 +36,8 @@ const (
 
 func init() {
 	// This package can parse both TOPS v1.5 and TOPS v1.6.
-	iextp.RegisterProtocol(TOPS15MessageProtocolID, Unmarshal)
-	iextp.RegisterProtocol(TOPS16MessageProtocolID, Unmarshal)
+	iextp.RegisterProtocol(V_1_5_MessageProtocolID, Unmarshal)
+	iextp.RegisterProtocol(V_1_6_MessageProtocolID, Unmarshal)
 }
 
 // Implements the TOPS protocol, v1.6.
