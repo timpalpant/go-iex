@@ -141,6 +141,14 @@ type PriceLevelUpdateMessage struct {
 	Price float64
 }
 
+func (m *PriceLevelUpdateMessage) IsBuySide() bool {
+	return m.MessageType == PriceLevelUpdateBuySide
+}
+
+func (m *PriceLevelUpdateMessage) IsSellSide() bool {
+	return m.MessageType == PriceLevelUpdateSellSide
+}
+
 func (m *PriceLevelUpdateMessage) EventProcessingComplete() bool {
 	return m.EventFlags&0x1 != 0
 }
