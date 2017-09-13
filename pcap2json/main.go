@@ -16,12 +16,12 @@ import (
 )
 
 func main() {
-	input := bufio.NewReader(os.Stdin)
-	scanner, err := iex.NewPcapScanner(input)
+	packetSource, err := iex.NewPacketDataSource(os.Stdin)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	scanner := iex.NewPcapScanner(packetSource)
 	output := bufio.NewWriter(os.Stdout)
 	enc := json.NewEncoder(output)
 

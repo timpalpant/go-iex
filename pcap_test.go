@@ -1,7 +1,6 @@
 package iex
 
 import (
-	"bufio"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,7 +14,27 @@ func TestPcapScanner(t *testing.T) {
 	}
 
 	testFilename := filepath.Join("testdata", "DEEP10.pcap.gz")
-	f, err := os.Open(testFilename)
+	count := testPcapScanner(t, testFilename)
+
+	if count != 392000 {
+		t.Fatalf("expected to process 392000 messages, got: %v", count)
+	}
+}
+
+func TestPcapNgScanner(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping pcap-ng test in short mode.")
+	}
+
+	testFilename := filepath.Join("testdata", "TOPS16.pcapng.gz")
+	count := testPcapScanner(t, testFilename)
+	if count != 57675 {
+		t.Fatalf("expected to process 57675 messages, got: %v", count)
+	}
+}
+
+func testPcapScanner(t *testing.T, filename string) int {
+	f, err := os.Open(filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,11 +45,12 @@ func TestPcapScanner(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := bufio.NewReader(f)
-	scanner, err := NewPcapScanner(r)
+	packetDataSource, err := NewPacketDataSource(f)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	scanner := NewPcapScanner(packetDataSource)
 
 	start := time.Now()
 	count := 0
@@ -38,10 +58,6 @@ func TestPcapScanner(t *testing.T) {
 		_, err = scanner.NextMessage()
 	}
 	elapsed := time.Since(start)
-
-	if count != 392000 {
-		t.Fatalf("expected to process 392000 messages, got: %v", count)
-	}
 
 	msgsPerSec := float64(count) / elapsed.Seconds()
 	mbPerSec := float64(stat.Size()) / 1000 / 1000 / elapsed.Seconds()
@@ -53,4 +69,6 @@ func TestPcapScanner(t *testing.T) {
 	if err != io.EOF && err != io.ErrUnexpectedEOF {
 		t.Fatal(err)
 	}
+
+	return count
 }

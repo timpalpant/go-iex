@@ -1,15 +1,65 @@
 package iex
 
 import (
+	"bufio"
+	"compress/gzip"
+	"encoding/binary"
 	"io"
 
 	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
+	"github.com/kor44/pcapng"
 
 	"github.com/timpalpant/go-iex/iextp"
 	_ "github.com/timpalpant/go-iex/iextp/deep"
 	_ "github.com/timpalpant/go-iex/iextp/tops"
 )
+
+const (
+	magicGzip1         = 0x1f
+	magicGzip2         = 0x8b
+	pcapNGMagic uint32 = 0x0A0D0D0A
+)
+
+type PacketDataSource interface {
+	gopacket.PacketDataSource
+	LinkType() layers.LinkType
+}
+
+// Initializes a new packet source for pcap or pcap-ng files.
+// Looks at the first 4 bytes to determine if the given Reader
+// is a pcap or pcap-ng format.
+func NewPacketDataSource(r io.Reader) (PacketDataSource, error) {
+	input := bufio.NewReader(r)
+	gzipMagic, err := input.Peek(2)
+	if err != nil {
+		return nil, err
+	}
+
+	if gzipMagic[0] == magicGzip1 && gzipMagic[1] == magicGzip2 {
+		if gzf, err := gzip.NewReader(input); err != nil {
+			return nil, err
+		} else {
+			input = bufio.NewReader(gzf)
+		}
+	}
+
+	magicBuf, err := input.Peek(4)
+	if err != nil {
+		return nil, err
+	}
+	magic := binary.LittleEndian.Uint32(magicBuf)
+
+	var packetSource PacketDataSource
+	if magic == pcapNGMagic {
+		packetSource, err = pcapng.NewReader(input)
+	} else {
+		packetSource, err = pcapgo.NewReader(input)
+	}
+
+	return packetSource, err
+}
 
 // PcapScanner is a high-level reader for extracting messages from the
 // pcap dumps provided by IEX in the HIST endpoint.
@@ -19,16 +69,11 @@ type PcapScanner struct {
 	currentMsgIndex int
 }
 
-func NewPcapScanner(r io.Reader) (*PcapScanner, error) {
-	pcapReader, err := pcapgo.NewReader(r)
-	if err != nil {
-		return nil, err
-	}
-	packetSource := gopacket.NewPacketSource(pcapReader, pcapReader.LinkType())
-
+func NewPcapScanner(packetDataSource PacketDataSource) *PcapScanner {
+	packetSource := gopacket.NewPacketSource(packetDataSource, packetDataSource.LinkType())
 	return &PcapScanner{
 		packetSource: packetSource,
-	}, nil
+	}
 }
 
 // Get the next Message in the pcap dump.
