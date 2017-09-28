@@ -89,10 +89,11 @@ func main() {
 	}
 	defer resp.Body.Close()
 
-	pcapScanner, err := iex.NewPcapScanner(resp.Body)
+	packetDataSource, err := iex.NewPacketDataSource(resp.Body)
 	if err != nil {
 		panic(err)
 	}
+	pcapScanner := iex.NewPcapScanner(packetDataSource)
 
 	// Write each quote update message to stdout, in JSON format.
 	enc := json.NewEncoder(os.Stdout)
