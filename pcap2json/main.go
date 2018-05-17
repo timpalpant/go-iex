@@ -23,6 +23,7 @@ func main() {
 
 	scanner := iex.NewPcapScanner(packetSource)
 	output := bufio.NewWriter(os.Stdout)
+	defer output.Flush()
 	enc := json.NewEncoder(output)
 
 	for {
