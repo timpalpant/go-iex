@@ -26,9 +26,10 @@ const (
 	ShortSalePriceTestStatus = 0x50
 
 	// Trading message formats.
-	QuoteUpdate = 0x51
-	TradeReport = 0x54
-	TradeBreak  = 0x42
+	QuoteUpdate   = 0x51
+	TradeReport   = 0x54
+	TradeBreak    = 0x42
+	OfficialPrice = 0x58
 
 	// Auction message formats.
 	AuctionInformation = 0x41
@@ -64,6 +65,8 @@ func Unmarshal(buf []byte) (iextp.Message, error) {
 		msg = &QuoteUpdateMessage{}
 	case TradeReport:
 		msg = &TradeReportMessage{}
+	case OfficialPrice:
+		msg = &OfficialPriceMessage{}
 	case TradeBreak:
 		msg = &TradeBreakMessage{}
 	case AuctionInformation:
@@ -524,6 +527,41 @@ func (m *TradeReportMessage) IsHighLowPriceEligible() bool {
 
 func (m *TradeReportMessage) IsVolumeEligible() bool {
 	return true
+}
+
+const (
+	// IEX official opening price.
+	OpeningPrice uint8 = 0x51
+	// IEX official closing price.
+	ClosingPrice uint8 = 0x4d
+)
+
+type OfficialPriceMessage struct {
+	MessageType uint8
+	// Price type identifier (OpeningPrice or ClosingPrice).
+	PriceType uint8
+	// The time an event triggered the official price calculation
+	// (e.g., auction match) as set by the IEX Trading System logic.
+	Timestamp time.Time
+	// Security represented in Nasdaq Integrated symbology.
+	Symbol string
+	// IEX Official Opening or Closing Price of an IEX-listed security.
+	OfficialPrice float64
+}
+
+func (m *OfficialPriceMessage) Unmarshal(buf []byte) error {
+	if len(buf) < 26 {
+		return fmt.Errorf(
+			"cannot unmarshal OfficialMessage from %v-length buffer",
+			len(buf))
+	}
+
+	m.MessageType = uint8(buf[0])
+	m.PriceType = uint8(buf[1])
+	m.Timestamp = ParseTimestamp(buf[2:10])
+	m.Symbol = ParseString(buf[10:18])
+	m.OfficialPrice = ParseFloat(buf[18:26])
+	return nil
 }
 
 // TradeBreakMessages are sent when an execution on IEX is broken

@@ -24,6 +24,7 @@ const (
 	ShortSalePriceTestStatus = tops.ShortSalePriceTestStatus
 	AuctionInformation       = tops.AuctionInformation
 	TradeReport              = tops.TradeReport
+	OfficialPrice            = tops.OfficialPrice
 	TradeBreak               = tops.TradeBreak
 
 	SecurityEvent            = 0x45
@@ -63,6 +64,8 @@ func Unmarshal(buf []byte) (iextp.Message, error) {
 		msg = &PriceLevelUpdateMessage{}
 	case TradeReport:
 		msg = &TradeReportMessage{}
+	case OfficialPrice:
+		msg = &OfficialPriceMessage{}
 	case TradeBreak:
 		msg = &TradeBreakMessage{}
 	case AuctionInformation:
@@ -81,6 +84,7 @@ type TradingStatusMessage = tops.TradingStatusMessage
 type OperationalHaltStatusMessage = tops.OperationalHaltStatusMessage
 type ShortSalePriceTestStatusMessage = tops.ShortSalePriceTestStatusMessage
 type TradeReportMessage = tops.TradeReportMessage
+type OfficialPriceMessage = tops.OfficialPriceMessage
 type TradeBreakMessage = tops.TradeBreakMessage
 type AuctionInformationMessage = tops.AuctionInformationMessage
 
