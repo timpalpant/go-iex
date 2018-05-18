@@ -13,6 +13,7 @@ import (
 	"os"
 
 	"github.com/timpalpant/go-iex"
+	"github.com/timpalpant/go-iex/iextp"
 )
 
 func main() {
@@ -33,6 +34,10 @@ func main() {
 			}
 
 			log.Fatal(err)
+		}
+
+		if msg, ok := msg.(*iextp.UnsupportedMessage); ok {
+			log.Printf("WARNING: Unsupported message type %v", byte(msg.MessageType))
 		}
 
 		enc.Encode(msg)
