@@ -92,19 +92,20 @@ func TestDEEP(t *testing.T) {
 	}
 
 	if result.Symbol != "SPY" {
-		t.Fatal("Expected symbol = %v, got %v", "SPY", result.Symbol)
+		t.Fatalf("Expected symbol = %v, got %v", "SPY", result.Symbol)
 	}
 }
 
 func TestBook(t *testing.T) {
 	c := setupTestClient()
-	symbols := []string{"SPY", "AAPL"}
+	symbols := []string{"SPY"}
 	result, err := c.GetBook(symbols)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if len(result) != len(symbols) {
+		t.Log(result)
 		t.Fatalf("Received %v results, expected %v", len(result), len(symbols))
 	}
 }

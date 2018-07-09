@@ -20,7 +20,7 @@ func TestUnmarshal_UnknownMessageType(t *testing.T) {
 		t.Fatal("expected to decode UnsupportedMessage")
 	}
 
-	if !reflect.DeepEqual([]byte(*unkMsg), data) {
+	if !reflect.DeepEqual(unkMsg.Message, data) {
 		t.Fatal("message data not equal to input")
 	}
 }
@@ -285,6 +285,34 @@ func TestTradeReportMessage(t *testing.T) {
 
 	if !trMsg.IsVolumeEligible() {
 		t.Error("message is volume eligible")
+	}
+}
+
+func TestOfficialPriceMessage(t *testing.T) {
+	data := []byte{
+		0x58,                                           // X = Official Price
+		0x51,                                           // Q = IEX Official Opening Price
+		0x00, 0xf0, 0x30, 0x2a, 0x5b, 0x25, 0xb6, 0x14, // 2017-04-17 09:30:00.000000000
+		0x5a, 0x49, 0x45, 0x58, 0x54, 0x20, 0x20, 0x20, // ZIEXT
+		0x24, 0x1d, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, // $99.05
+	}
+
+	msg, err := Unmarshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	opMsg := *msg.(*OfficialPriceMessage)
+	expected := OfficialPriceMessage{
+		MessageType:   OfficialPrice,
+		PriceType:     OpeningPrice,
+		Timestamp:     time.Date(2017, time.April, 17, 9, 30, 0, 0, time.UTC),
+		Symbol:        "ZIEXT",
+		OfficialPrice: 99.05,
+	}
+
+	if opMsg != expected {
+		t.Fatalf("parsed: %v, expected: %v", msg, expected)
 	}
 }
 

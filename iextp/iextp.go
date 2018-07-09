@@ -95,10 +95,14 @@ type Message interface {
 
 // UnsupportedMessage may be returned by a protocol for any
 // message types it does not know how to decode.
-type UnsupportedMessage []byte
+type UnsupportedMessage struct {
+	MessageType uint8
+	Message     []byte
+}
 
 func (m *UnsupportedMessage) Unmarshal(buf []byte) error {
-	*m = buf
+	m.MessageType = uint8(buf[0])
+	m.Message = buf
 	return nil
 }
 

@@ -13,6 +13,7 @@ import (
 	"os"
 
 	"github.com/timpalpant/go-iex"
+	"github.com/timpalpant/go-iex/iextp"
 )
 
 func main() {
@@ -23,6 +24,7 @@ func main() {
 
 	scanner := iex.NewPcapScanner(packetSource)
 	output := bufio.NewWriter(os.Stdout)
+	defer output.Flush()
 	enc := json.NewEncoder(output)
 
 	for {
@@ -33,6 +35,10 @@ func main() {
 			}
 
 			log.Fatal(err)
+		}
+
+		if msg, ok := msg.(*iextp.UnsupportedMessage); ok {
+			log.Printf("WARNING: Unsupported message type %v", byte(msg.MessageType))
 		}
 
 		enc.Encode(msg)

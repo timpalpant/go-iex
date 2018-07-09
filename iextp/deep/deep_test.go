@@ -20,7 +20,7 @@ func TestUnmarshal_UnknownMessageType(t *testing.T) {
 		t.Fatal("expected to decode UnsupportedMessage")
 	}
 
-	if !reflect.DeepEqual([]byte(*unkMsg), data) {
+	if !reflect.DeepEqual(unkMsg.Message, data) {
 		t.Fatal("message data not equal to input")
 	}
 }
