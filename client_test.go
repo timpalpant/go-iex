@@ -120,6 +120,11 @@ func TestSymbols(t *testing.T) {
 	if len(symbols) == 0 {
 		t.Fatal("Received zero symbols")
 	}
+
+	symbol := symbols[0]
+	if symbol.Symbol == "" || symbol.Name == "" || symbol.Date == "" {
+		t.Fatal("Failed to decode symbol correctly")
+	}
 }
 
 func TestMarkets(t *testing.T) {
@@ -131,5 +136,17 @@ func TestMarkets(t *testing.T) {
 
 	if len(markets) == 0 {
 		t.Fatal("Received zero markets")
+	}
+}
+
+func TestGetHistoricalDaily(t *testing.T) {
+	c := setupTestClient()
+	stats, err := c.GetHistoricalDaily(&HistoricalDailyRequest{Last: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(stats) != 5 {
+		t.Fatalf("Received %d historical daily stats, expected %d", len(stats), 5)
 	}
 }

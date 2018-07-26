@@ -337,7 +337,7 @@ type historicalSummaryRequest struct {
 // Historical data is only available for prior months, starting with January 2014.
 func (c *Client) GetHistoricalDaily(req *HistoricalDailyRequest) ([]*Stats, error) {
 	var result []*Stats
-	err := c.getJSON("/stats/historical/daily", nil, &result)
+	err := c.getJSON("/stats/historical/daily", req, &result)
 	return result, err
 }
 

@@ -202,7 +202,7 @@ type Market struct {
 
 type Symbol struct {
 	// Refers to the symbol represented in Nasdaq Integrated symbology (INET).
-	Ticker string
+	Symbol string
 	// Refers to the name of the company or security.
 	Name string
 	// Refers to the date the symbol reference data was generated.
@@ -249,7 +249,7 @@ type Stats struct {
 	// Refers to IEX’s percentage of total US Equity market volume.
 	MarketShare float64
 	// Will be true if the trading day is a half day.
-	IsHalfDay bool
+	IsHalfDay int
 	// Refers to the number of lit shares traded on IEX (single-counted).
 	LitVolume int
 }
