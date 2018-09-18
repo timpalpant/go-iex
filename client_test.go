@@ -2,9 +2,31 @@ package iex
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
+
+type mockHTTPClient struct {
+	body    string
+	headers map[string]string
+	code    int
+	err     error
+}
+
+func (c *mockHTTPClient) Get(url string) (*http.Response, error) {
+	w := httptest.NewRecorder()
+	w.WriteString(c.body)
+
+	for key, value := range c.headers {
+		w.Header().Add(key, value)
+	}
+
+	w.WriteHeader(c.code)
+
+	resp := w.Result()
+	return resp, c.err
+}
 
 func setupTestClient() *Client {
 	return NewClient(&http.Client{
@@ -12,37 +34,32 @@ func setupTestClient() *Client {
 	})
 }
 
-func testTOPS(t *testing.T, symbols []string) {
-	c := setupTestClient()
-	result, err := c.GetTOPS(symbols)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(result) != len(symbols) {
-		t.Fatalf("Received %v results, expected %v", len(result), len(symbols))
-	}
-
-	// TODO(palpant): Test parsing with a mock http client.
-}
-
-func TestTOPS_OneSymbol(t *testing.T) {
-	testTOPS(t, []string{"SPY"})
-}
-
-func TestTOPS_TwoSymbols(t *testing.T) {
-	testTOPS(t, []string{"SPY", "AAPL"})
-}
-
 func TestTOPS_AllSymbols(t *testing.T) {
-	c := setupTestClient()
-	result, err := c.GetTOPS(nil)
-	if err != nil {
-		t.Fatal(err)
+	// TODO: Add expected field to struct and use it to verify results
+	var testCases = []struct {
+		symbols []string
+		code    int
+		body    string
+		err     error
+		headers map[string]string
+	}{
+		{symbols: []string{"SNAP", "FB"}, code: 200, body: `[{"symbol":"SNAP","sector":"softwareservices","securityType":"commonstock","bidPrice":0,"bidSize":0,"askPrice":0,"askSize":0,"lastUpdated":1537215438021,"lastSalePrice":9.165,"lastSaleSize":123,"lastSaleTime":1537214395927,"volume":525079,"marketPercent":0.0238},{"symbol":"FB","sector":"softwareservices","securityType":"commonstock","bidPrice":0,"bidSize":0,"askPrice":0,"askSize":0,"lastUpdated":1537216916977,"lastSalePrice":160.6,"lastSaleSize":100,"lastSaleTime":1537214399372,"volume":991898,"marketPercent":0.04741}]`, err: nil, headers: map[string]string{"Content-Type": "application/json"}},
+		{symbols: []string{"AIG+"}, code: 200, body: `[{"symbol":"AIG+","sector":"n/a","securityType":"warrant","bidPrice":0,"bidSize":0,"askPrice":0,"askSize":0,"lastUpdated":1537214400001,"lastSalePrice":0,"lastSaleSize":0,"lastSaleTime":0,"volume":0,"marketPercent":0}]`, err: nil, headers: map[string]string{"Content-Type": "application/json"}},
 	}
 
-	if len(result) == 0 {
-		t.Fatalf("Received %v results", len(result))
+	for _, tt := range testCases {
+		httpc := mockHTTPClient{body: tt.body, code: tt.code, err: tt.err, headers: tt.headers}
+		c := NewClient(&httpc)
+
+		result, err := c.GetTOPS(tt.symbols)
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(result) != len(tt.symbols) {
+			t.Fatalf("Received %v results, expected %v", len(result), len(tt.symbols))
+		}
 	}
 }
 

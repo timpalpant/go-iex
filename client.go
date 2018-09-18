@@ -12,12 +12,16 @@ import (
 
 const baseEndpoint = "https://api.iextrading.com/1.0"
 
-// Client provides methods to interact with IEX's HTTP API for developers.
-type Client struct {
-	client *http.Client
+type HTTPClient interface {
+	Get(url string) (resp *http.Response, err error)
 }
 
-func NewClient(client *http.Client) *Client {
+// Client provides methods to interact with IEX's HTTP API for developers.
+type Client struct {
+	client HTTPClient
+}
+
+func NewClient(client HTTPClient) *Client {
 	return &Client{client}
 }
 
