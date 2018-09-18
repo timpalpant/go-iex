@@ -1,10 +1,31 @@
 package iex
 
 import (
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
+
+type MockHTTPClient struct {
+	body    string
+	headers map[string]string
+	code    int
+	err     error
+}
+
+func (c *MockHTTPClient) Get(url string) (*http.Response, error) {
+	w := httptest.NewRecorder()
+	io.WriteString(w, c.body)
+
+	for key, value := range c.headers {
+		w.Header().Add(key, value)
+	}
+
+	resp := w.Result()
+	return resp, c.err
+}
 
 func setupTestClient() *Client {
 	return NewClient(&http.Client{
@@ -12,8 +33,7 @@ func setupTestClient() *Client {
 	})
 }
 
-func testTOPS(t *testing.T, symbols []string) {
-	c := setupTestClient()
+func testTOPS(c *Client, t *testing.T, symbols []string) {
 	result, err := c.GetTOPS(symbols)
 	if err != nil {
 		t.Fatal(err)
@@ -22,27 +42,26 @@ func testTOPS(t *testing.T, symbols []string) {
 	if len(result) != len(symbols) {
 		t.Fatalf("Received %v results, expected %v", len(result), len(symbols))
 	}
-
-	// TODO(palpant): Test parsing with a mock http client.
 }
 
-func TestTOPS_OneSymbol(t *testing.T) {
-	testTOPS(t, []string{"SPY"})
-}
-
-func TestTOPS_TwoSymbols(t *testing.T) {
-	testTOPS(t, []string{"SPY", "AAPL"})
+var testCases = []struct {
+	symbols []string
+	code    int
+	body    string
+	err     error
+	headers map[string]string
+}{
+	{symbols: []string{"SNAP", "FB"}, code: 200, body: `[{"symbol":"SNAP","sector":"softwareservices","securityType":"commonstock","bidPrice":0,"bidSize":0,"askPrice":0,"askSize":0,"lastUpdated":1537215438021,"lastSalePrice":9.165,"lastSaleSize":123,"lastSaleTime":1537214395927,"volume":525079,"marketPercent":0.0238},{"symbol":"FB","sector":"softwareservices","securityType":"commonstock","bidPrice":0,"bidSize":0,"askPrice":0,"askSize":0,"lastUpdated":1537216916977,"lastSalePrice":160.6,"lastSaleSize":100,"lastSaleTime":1537214399372,"volume":991898,"marketPercent":0.04741}]`, err: nil, headers: map[string]string{"Content-Type": "application/json"}},
+	{symbols: []string{"AIG+"}, code: 200, body: `[{"symbol":"AIG+","sector":"n/a","securityType":"warrant","bidPrice":0,"bidSize":0,"askPrice":0,"askSize":0,"lastUpdated":1537214400001,"lastSalePrice":0,"lastSaleSize":0,"lastSaleTime":0,"volume":0,"marketPercent":0}]`, err: nil, headers: map[string]string{"Content-Type": "application/json"}},
 }
 
 func TestTOPS_AllSymbols(t *testing.T) {
-	c := setupTestClient()
-	result, err := c.GetTOPS(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	for _, tt := range testCases {
+		// Mock the http.Response
+		httpc := MockHTTPClient{body: tt.body, code: tt.code, err: tt.err, headers: tt.headers}
+		c := NewClient(&httpc)
 
-	if len(result) == 0 {
-		t.Fatalf("Received %v results", len(result))
+		testTOPS(c, t, tt.symbols)
 	}
 }
 
