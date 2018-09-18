@@ -355,6 +355,111 @@ type HistoricalDailyRequest struct {
 	Last int `url:"last,omitempty"`
 }
 
+// GetKeyStats returns key statistics for a symbol.
+func (c *Client) GetKeyStats(symbol string) (*KeyStats, error) {
+	var result *KeyStats
+	err := c.getJSON("/stock/"+symbol+"/stats", nil, &result)
+	if err != nil {
+		return nil, err
+	}
+	if x, ok := result.ExDividendDateJSON.(int); ok {
+		result.ExDividendDate = "n/a"
+	} else {
+		result.ExDividendDate = fmt.Sprintf("%v", x)
+	}
+	if x, ok := result.ShortDateJSON.(int); ok {
+		result.ShortDate = "n/a"
+	} else {
+		result.ShortDate = fmt.Sprintf("%v", x)
+	}
+	if x, ok := result.RevenuePerEmployeeJSON.(float64); ok {
+		result.RevenuePerEmployee = x
+	} else {
+		result.RevenuePerEmployee = 0
+	}
+	return result, nil
+}
+
+// GetNews returns news items for a symbol. Use "market" to receive global market news.
+func (c *Client) GetNews(symbol string) ([]*News, error) {
+	var result []*News
+	err := c.getJSON("/stock/"+symbol+"/news", nil, &result)
+	return result, err
+}
+
+// GetStockQUotes returns a map of quotes for the given symbols.
+//
+// A maximumum of 100 symbols may be requested.
+func (c *Client) GetStockQuotes(symbols []string) (map[string]*StockQuote, error) {
+	req := &stockQuotesRequest{symbols, "quote"}
+	var qresult map[string]map[string]*StockQuote
+	err := c.getJSON("/stock/market/batch", req, &qresult)
+	if err != nil {
+		return nil, err
+	}
+	result := map[string]*StockQuote{}
+	for k := range qresult {
+		result[k] = qresult[k]["quote"]
+	}
+	return result, err
+}
+
+type stockQuotesRequest struct {
+	Symbols []string `url:"symbols,comma,omitempty"`
+	Type    string   `url:"types,comma,omitempty"`
+}
+
+// GetList returns a map of quotes for the given list.
+// list can be "mostactive", "gainers" or "losers".
+//
+// See: https://iextrading.com/developer/docs/#list
+func (c *Client) GetList(list string) ([]*StockQuote, error) {
+	var result []*StockQuote
+	err := c.getJSON("/stock/market/list/"+list+"?displayPercent=true", nil, &result)
+	return result, err
+}
+
+// GetCompany
+func (c *Client) GetCompany(symbol string) (*Company, error) {
+	var result *Company
+	err := c.getJSON("/stock/"+symbol+"/company", nil, &result)
+	return result, err
+}
+
+// GetDividends
+func (c *Client) GetDividends(symbol string) ([]*Dividends, error) {
+	var result []*Dividends
+	err := c.getJSON("/stock/"+symbol+"/dividends/5y", nil, &result)
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range result {
+		if x, ok := d.IndicatedJSON.(float64); ok {
+			d.Indicated = x
+		} else {
+			d.Indicated = 0
+		}
+		if x, ok := d.AmountJSON.(float64); ok {
+			d.Amount = x
+		} else {
+			d.Amount = 0
+		}
+	}
+	return result, nil
+}
+
+// GetChart retuns chart data for a symbol covering a date range.
+// Range can be: 5y 2y 1y ytd 6m 3d 1m 1d
+// Please note the 1d range returns different data than other formats.
+//
+// TODO: This is pretty undefined and unsupported right now due to different chart types.
+// See: https://iextrading.com/developer/docs/#chart
+func (c *Client) GetChart(symbol string, daterange string) ([]*Chart, error) {
+	var result []*Chart
+	err := c.getJSON("/stock/"+symbol+"/chart/"+daterange, nil, &result)
+	return result, err
+}
+
 func (c *Client) getJSON(route string, request interface{}, response interface{}) error {
 	url := c.endpoint(route)
 

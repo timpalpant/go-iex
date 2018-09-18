@@ -324,3 +324,192 @@ type HistoricalSummary struct {
 	VenueXNYSFirstWaveRate      float64
 	VenueXPHLFirstWaveRate      float64
 }
+
+type KeyStats struct {
+	CompanyName            string
+	Marketcap              float64 // is not calculated in real time.
+	Beta                   float64
+	Week52high             float64
+	Week52low              float64
+	Week52change           float64
+	ShortInterest          float64
+	ShortDateJSON          interface{} `json:"shortDate"`
+	ShortDate              string      // if not available, iex returns a number 0, see ShortDateJSON
+	DividendRate           float64
+	DividendYield          float64
+	ExDividendDateJSON     interface{} `json:"exDividendDate"`
+	ExDividendDate         string      // if not available, iex returns a number 0, see ExDividendDateJSON
+	LatestEPS              float64     // (Most recent quarter)
+	LatestEPSDate          string
+	SharesOutstanding      float64
+	Float                  float64
+	ReturnOnEquity         float64 // (Trailing twelve months)
+	ConsensusEPS           float64 // (Most recent quarter)
+	NumberOfEstimates      float64 // (Most recent quarter)
+	Symbol                 string
+	EBITDA                 float64     // (Trailing twelve months)
+	Revenue                float64     // (Trailing twelve months)
+	GrossProfit            float64     // (Trailing twelve months)
+	Cash                   float64     // refers to total cash. (Trailing twelve months)
+	Debt                   float64     // refers to total debt. (Trailing twelve months)
+	TtmEPS                 float64     // (Trailing twelve months)
+	RevenuePerShare        float64     // (Trailing twelve months)
+	RevenuePerEmployeeJSON interface{} `json:"revenuePerEmployee"`
+	RevenuePerEmployee     float64     // (Trailing twelve months)
+	PeRatioHigh            float64
+	PeRatioLow             float64
+	EPSSurpriseDollar      float64 // refers to the difference between actual EPS and consensus EPS in dollars.
+	EPSSurprisePercent     float64 // refers to the percent difference between actual EPS and consensus EPS.
+	ReturnOnAssets         float64 // (Trailing twelve months)
+	ReturnOnCapital        float64 // (Trailing twelve months)
+	ProfitMargin           float64
+	PriceToSales           float64
+	PriceToBook            float64
+	Day200MovingAvg        float64
+	Day50MovingAvg         float64
+	InstitutionPercent     float64 // represents top 15 institutions
+	InsiderPercent         float64
+	ShortRatio             float64
+	Year5ChangePercent     float64
+	Year2ChangePercent     float64
+	Year1ChangePercent     float64
+	YtdChangePercent       float64
+	Month6ChangePercent    float64
+	Month3ChangePercent    float64
+	Month1ChangePercent    float64
+	Day5ChangePercent      float64
+}
+
+type News struct {
+	Datetime string
+	Headline string
+	Source   string
+	URL      string
+	Summary  string
+	Related  string
+}
+
+type StockQuote struct {
+	Symbol           string  // refers to the stock ticker.
+	CompanyName      string  // refers to the company name.
+	PrimaryExchange  string  // refers to the primary listings exchange.
+	Sector           string  // refers to the sector of the stock.
+	CalculationPrice string  // refers to the source of the latest price. ("tops", "sip", "previousclose" or "close")
+	Open             float64 // refers to the official open price
+	OpenTime         int64   // refers to the official listing exchange time for the open
+	Close            float64 // refers to the official close price
+	CloseTime        int64   // refers to the official listing exchange time for the close
+	High             float64 // refers to the market-wide highest price from the SIP. 15 minute delayed
+	Low              float64 // refers to the market-wide lowest price from the SIP. 15 minute delayed
+	LatestPrice      float64 // refers to the latest price being the IEX real time price, the 15 minute delayed market price, or the previous close price.
+	LatestSource     string  // refers to the source of latestPrice. ("IEX real time price", "15 minute delayed price", "Close" or "Previous close")
+	LatestTime       string  // refers to a human readable time of the latestPrice. The format will vary based on latestSource.
+	LatestUpdate     int64   // refers to the update time of latestPrice in milliseconds since midnight Jan 1, 1970.
+	LatestVolume     int64   // refers to the total market volume of the stock.
+	IexRealtimePrice float64 // refers to last sale price of the stock on IEX. (Refer to the attribution section above.)
+	IexRealtimeSize  int64   // refers to last sale size of the stock on IEX.
+	IexLastUpdated   int64   // refers to the last update time of the data in milliseconds since midnight Jan 1, 1970 UTC or -1 or 0. If the value is -1 or 0, IEX has not quoted the symbol in the trading day.
+	DelayedPrice     float64 // refers to the 15 minute delayed market price.
+	DelayedPriceTime int64   // refers to the time of the delayed market price.
+	PreviousClose    float64 // refers to the adjusted close price of the last trading day of the stock.
+	Change           float64 // is calculated using calculationPrice from previousClose.
+	ChangePercent    float64 // is calculated using calculationPrice from previousClose.
+	IexMarketPercent float64 // refers to IEX’s percentage of the market in the stock.
+	IexVolume        int64   // refers to shares traded in the stock on IEX.
+	AvgTotalVolume   int64   // refers to the 30 day average volume on all markets.
+	IexBidPrice      float64 // refers to the best bid price on IEX.
+	IexBidSize       int64   // refers to amount of shares on the bid on IEX.
+	IexAskPrice      float64 // refers to the best ask price on IEX.
+	IexAskSize       int64   // refers to amount of shares on the ask on IEX.
+	MarketCap        int64   // is calculated in real time using calculationPrice.
+	PeRatio          float64 // is calculated in real time using calculationPrice.
+	Week52High       float64 // refers to the adjusted 52 week high.
+	Week52Low        float64 // refers to the adjusted 52 week low.
+	YtdChange        float64 // refers to the price change percentage from start of year to previous close.
+}
+
+type Company struct {
+	Symbol      string
+	CompanyName string
+	Exchange    string
+	Industry    string
+	Website     string
+	Description string
+	CEO         string
+	Sector      string
+	IssueType   string // refers to the common issue type of the stock.
+	// ad – American Depository Receipt (ADR’s)
+	// re – Real Estate Investment Trust (REIT’s)
+	// ce – Closed end fund (Stock and Bond Fund)
+	// si – Secondary Issue
+	// lp – Limited Partnerships
+	// cs – Common Stock
+	// et – Exchange Traded Fund (ETF)
+	// (blank) = Not Available, i.e., Warrant, Note, or (non-filing) Closed Ended Funds
+}
+
+type Dividends struct {
+	ExDate       string      // refers to the dividend ex-date
+	PaymentDate  string      // refers to the payment date
+	RecordDate   string      // refers to the dividend record date
+	DeclaredDate string      // refers to the dividend declaration date
+	AmountJSON   interface{} `json:"amount"`
+	Amount       float64     // refers to the payment amount
+	Flag         string      // refers to the dividend flag (
+	// FI = Final dividend, div ends or instrument ends,
+	// LI = Liquidation, instrument liquidates,
+	// PR = Proceeds of a sale of rights or shares,
+	// RE = Redemption of rights,
+	// AC = Accrued dividend,
+	// AR = Payment in arrears,
+	// AD = Additional payment,
+	// EX = Extra payment,
+	// SP = Special dividend,
+	// YE = Year end,
+	// UR = Unknown rate,
+	// SU = Regular dividend is suspended)
+	Type      string // refers to the dividend payment type (Dividend income, Interest income, Stock dividend, Short term capital gain, Medium term capital gain, Long term capital gain, Unspecified term capital gain)
+	Qualified string // refers to the dividend income type
+	// P = Partially qualified income
+	// Q = Qualified income
+	// N = Unqualified income
+	// null = N/A or unknown
+	IndicatedJSON interface{} `json:"Indicated"`
+	Indicated     float64     // refers to the indicated rate of the dividend
+}
+
+type Chart struct {
+	// Only available on 1d charts
+	Minute         string
+	Average        float64
+	Notional       float64
+	NumberOfTrades int
+	MarketHigh     float64
+	MarketLow      float64
+
+	// only available on 1d charts, 15 minutes delayed
+	MarketAverage        float64
+	MarketVolume         int
+	MarketNotional       float64
+	MarketNumberOfTrades int
+	MarketChangeOverTime float64
+
+	// TODO: Only available on 1d charts when chartSimplify = true
+	// simplifyFactor: array (of what?)
+
+	// Not availabe on 1d charts
+	Date             string
+	Open             float64
+	Close            float64
+	UnadjustedVolume int
+	Change           float64
+	ChangePercent    float64
+	VWAP             float64 // volume weitghted average price
+
+	// Available on all charts
+	High           float64
+	Low            float64
+	Volume         int
+	Label          string
+	ChangeOverTime float64
+}
