@@ -22,6 +22,8 @@ func (c *mockHTTPClient) Get(url string) (*http.Response, error) {
 		w.Header().Add(key, value)
 	}
 
+	w.WriteHeader(c.code)
+
 	resp := w.Result()
 	return resp, c.err
 }
