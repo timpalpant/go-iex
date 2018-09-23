@@ -20,6 +20,16 @@ import (
 	"github.com/timpalpant/go-iex/iextp/tops"
 )
 
+var header = []string{
+	"symbol",
+	"time",
+	"open",
+	"high",
+	"low",
+	"close",
+	"volume",
+}
+
 func makeBars(trades []*tops.TradeReportMessage, openTime, closeTime time.Time) []*consolidator.Bar {
 	bars := consolidator.MakeBars(trades)
 	for _, bar := range bars {
@@ -66,6 +76,9 @@ func main() {
 
 	scanner := iex.NewPcapScanner(packetSource)
 	writer := csv.NewWriter(os.Stdout)
+	if err := writer.Write(header); err != nil {
+		log.Fatal(err)
+	}
 	defer writer.Flush()
 
 	var trades []*tops.TradeReportMessage

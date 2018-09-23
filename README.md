@@ -27,6 +27,7 @@ $ pcap2csv < input.pcap > output.csv
 which produces a CSV with OHLC data:
 
 ```csv
+symbol,time,open,high,low,close,volume
 AAPL,2017-07-10T14:33:00Z,148.9100,149.0000,148.9100,148.9800,2527
 AMZN,2017-07-10T14:33:00Z,364.8900,364.9600,364.8900,364.9600,1486
 DISH,2017-07-10T14:33:00Z,49.6600,49.6600,49.6200,49.6200,1049
