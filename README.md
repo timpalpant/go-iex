@@ -15,6 +15,28 @@ and does not endorse or recommend this library.
 
 ## Usage
 
+### pcap2csv
+
+You can use the included `pcap2csv` tool to create intraday minute bars from the pcap data files:
+
+```
+$ go install github.com/timpalpant/go-iex/pcap2csv
+$ pcap2csv < input.pcap > output.csv
+```
+
+which produces a CSV with OHLC data:
+
+```csv
+symbol,time,open,high,low,close,volume
+AAPL,2017-07-10T14:33:00Z,148.9100,149.0000,148.9100,148.9800,2527
+AMZN,2017-07-10T14:33:00Z,364.8900,364.9600,364.8900,364.9600,1486
+DISH,2017-07-10T14:33:00Z,49.6600,49.6600,49.6200,49.6200,1049
+ELLO,2017-07-10T14:33:00Z,10.0300,10.1100,10.0300,10.1100,3523
+FB,2017-07-10T14:33:00Z,46.4000,46.4000,46.3400,46.3400,1633
+FICO,2017-07-10T14:33:00Z,57.4200,57.4200,57.3500,57.3800,1717
+GOOD,2017-07-10T14:33:00Z,18.7700,18.7700,18.7300,18.7300,2459
+```
+
 ### pcap2json
 
 If you just need a tool to convert the provided pcap data files into JSON, you can use the included `pcap2json` tool:
