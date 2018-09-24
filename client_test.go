@@ -114,7 +114,32 @@ func TestDEEP(t *testing.T) {
 }
 
 func TestBook(t *testing.T) {
-	c := setupTestClient()
+	body := `{
+		"YELP": {
+			"bids": [
+				{
+					"price": 63.09,
+					"size": 300,
+					"timestamp": 1494538496261
+				}
+			],
+			"asks": [
+				{
+					"price": 63.92,
+					"size": 300,
+					"timestamp": 1494538381896
+				},
+				{
+					"price": 63.97,
+					"size": 300,
+					"timestamp": 1494538381885
+				}
+			]
+		}
+	}`
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
 	symbols := []string{"SPY"}
 	result, err := c.GetBook(symbols)
 	if err != nil {
