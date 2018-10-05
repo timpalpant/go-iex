@@ -1,6 +1,7 @@
 package iex
 
 import (
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,6 +33,19 @@ func setupTestClient() *Client {
 	return NewClient(&http.Client{
 		Timeout: 5 * time.Second,
 	})
+}
+
+// read test json data from testdata directory
+// used to load test responses from the iex api
+func readTestData(fileName string) (string, error) {
+	b, err := ioutil.ReadFile("testdata/responses/" + fileName)
+	if err != nil {
+		return "", err
+	}
+
+	str := string(b)
+
+	return str, nil
 }
 
 func TestTOPS_AllSymbols(t *testing.T) {
@@ -379,6 +393,54 @@ func TestSymbols(t *testing.T) {
 	symbol := symbols[0]
 	if symbol.Symbol == "" || symbol.Name == "" || symbol.Date == "" {
 		t.Fatal("Failed to decode symbol correctly")
+	}
+}
+
+func TestGetStockQuotes(t *testing.T) {
+	// this file contains data from here:
+	// https://api.iextrading.com/1.0/stock/market/batch?symbols=aapl,fb&types=quote
+	body, err := readTestData("batch_quote.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbols := []string{"AAPL", "FB"}
+
+	result, err := c.GetStockQuotes(symbols)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) != len(symbols) {
+		t.Fatalf("Number of symbols returned %d, not equal to requested %d",
+			len(result), len(symbols))
+	}
+}
+
+func TestGetDividends(t *testing.T) {
+	// this file contains data from here:
+	// https://api.iextrading.com/1.0/stock/aapl/dividends/5y
+	body, err := readTestData("dividends.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbol := "AAPL"
+
+	result, err := c.GetDividends(symbol)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := 20
+	if len(result) != expected {
+		t.Fatalf("Returned unexpected count %d should be %d", len(result), expected)
 	}
 }
 

@@ -391,7 +391,7 @@ func (c *Client) GetNews(symbol string) ([]*News, error) {
 	return result, err
 }
 
-// GetStockQUotes returns a map of quotes for the given symbols.
+// GetStockQuotes returns a map of quotes for the given symbols.
 //
 // A maximumum of 100 symbols may be requested.
 func (c *Client) GetStockQuotes(symbols []string) (map[string]*StockQuote, error) {
