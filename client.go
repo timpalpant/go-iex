@@ -12,6 +12,7 @@ import (
 
 const baseEndpoint = "https://api.iextrading.com/1.0"
 
+// HTTPClient an interface to describe simple requests to a url
 type HTTPClient interface {
 	Get(url string) (resp *http.Response, err error)
 }
@@ -21,11 +22,12 @@ type Client struct {
 	client HTTPClient
 }
 
+// NewClient create a new client
 func NewClient(client HTTPClient) *Client {
 	return &Client{client}
 }
 
-// TOPS provides IEX’s aggregated best quoted bid and offer
+// GetTOPS provides IEX’s aggregated best quoted bid and offer
 // position in near real time for all securities on IEX’s
 // displayed limit order book. TOPS is ideal for developers
 // needing both quote and trade data.
@@ -43,7 +45,7 @@ type topsRequest struct {
 	Symbols []string `url:"symbols,comma,omitempty"`
 }
 
-// Last provides trade data for executions on IEX.
+// GetLast provides trade data for executions on IEX.
 // It is a near real time, intraday API that provides IEX last sale price,
 // size and time. Last is ideal for developers that need a lightweight
 // stock quote.
@@ -61,7 +63,7 @@ type lastRequest struct {
 	Symbols []string `url:"symbols,comma,omitempty"`
 }
 
-// HIST will provide the output of IEX data products for download on
+// GetHIST will provide the output of IEX data products for download on
 // a T+1 basis. Data will remain available for the trailing twelve months.
 //
 // Only data for the given day will be returned.
@@ -88,7 +90,7 @@ func (c *Client) GetAllAvailableHIST() (map[string][]*HIST, error) {
 	return result, err
 }
 
-// DEEP is used to receive real-time depth of book quotations direct from IEX.
+// GetDEEP is used to receive real-time depth of book quotations direct from IEX.
 // The depth of book quotations received via DEEP provide an aggregated size
 // of resting displayed orders at a price and side, and do not indicate the
 // size or number of individual orders at any price level. Non-displayed
@@ -109,7 +111,7 @@ type deepRequest struct {
 	Symbols string `url:"symbols"`
 }
 
-// Book shows IEX’s bids and asks for given symbols.
+// GetBook shows IEX’s bids and asks for given symbols.
 //
 // A maximumum of 10 symbols may be requested.
 func (c *Client) GetBook(symbols []string) (map[string]*Book, error) {
@@ -123,7 +125,7 @@ type bookRequest struct {
 	Symbols []string `url:"symbols,comma,omitempty"`
 }
 
-// Trade report messages are sent when an order on the IEX Order Book is
+// GetTrades report messages are sent when an order on the IEX Order Book is
 // executed in whole or in part. DEEP sends a Trade report message for
 // every individual fill.
 //
@@ -141,7 +143,7 @@ type tradesRequest struct {
 	Last    int      `url:"last,omitempty"`
 }
 
-// The System event message is used to indicate events that apply to
+// GetSystemEvents gets the system event message which is used to indicate events that apply to
 // the market or the data feed.
 //
 // There will be a single message disseminated per channel for each
@@ -159,8 +161,9 @@ type systemEventRequest struct {
 	Symbols []string `url:"symbols,comma,omitempty"`
 }
 
-// The Trading status message is used to indicate the current trading status
-// of a security. For IEX-listed securities, IEX acts as the primary market
+// GetTradingStatus gets the trading status message which, is used to
+// indicate the current trading status of a security.
+// For IEX-listed securities, IEX acts as the primary market
 // and has the authority to institute a trading halt or trading pause in a
 // security due to news dissemination or regulatory reasons. For
 // non-IEX-listed securities, IEX abides by any regulatory trading halts
@@ -200,7 +203,7 @@ type tradingStatusRequest struct {
 	Symbols []string `url:"symbols,comma,omitempty"`
 }
 
-// The Exchange may suspend trading of one or more securities on IEX
+// GetOperationalHaltStatus The Exchange may suspend trading of one or more securities on IEX
 // for operational reasons and indicates such operational halt using
 // the Operational halt status message.
 //
@@ -229,7 +232,7 @@ type opHaltStatusRequest struct {
 	Symbols []string `url:"symbols,comma,omitempty"`
 }
 
-// In association with Rule 201 of Regulation SHO, the Short Sale
+// GetShortSaleRestriction In association with Rule 201 of Regulation SHO, the Short Sale
 // Price Test Message is used to indicate when a short sale price
 // test restriction is in effect for a security.
 //
@@ -253,7 +256,7 @@ type ssrStatusRequest struct {
 	Symbols []string `url:"symbols,comma,omitempty"`
 }
 
-// The Security event message is used to indicate events that
+// GetSecurityEvents The Security event message is used to indicate events that
 // apply to a security. A Security event message will be sent
 // whenever such event occurs.
 //
@@ -269,7 +272,7 @@ type securityEventRequest struct {
 	Symbols []string `url:"symbols,comma,omitempty"`
 }
 
-// Trade break messages are sent when an execution on IEX is broken
+// GetTradeBreaks Trade break messages are sent when an execution on IEX is broken
 // on that same trading day. Trade breaks are rare and only affect
 // applications that rely upon IEX execution based data.
 //
@@ -287,7 +290,7 @@ type tradeBreaksRequest struct {
 	Last    int      `url:"last,omitempty"`
 }
 
-// This endpoint returns near real time traded volume on the markets.
+// GetMarkets This endpoint returns near real time traded volume on the markets.
 // Market data is captured by the IEX system from approximately
 // 7:45 a.m. to 5:15 p.m. ET.
 func (c *Client) GetMarkets() ([]*Market, error) {
@@ -305,13 +308,14 @@ func (c *Client) GetSymbols() ([]*Symbol, error) {
 	return result, err
 }
 
+// GetIntradayStats gets intra day volume and priceing data
 func (c *Client) GetIntradayStats() (*IntradayStats, error) {
 	var result *IntradayStats
 	err := c.getJSON("/stats/intraday", nil, &result)
 	return result, err
 }
 
-// This call will return a minimum of the last five trading days up
+// GetRecentStats This call will return a minimum of the last five trading days up
 // to all trading days of the current month.
 func (c *Client) GetRecentStats() ([]*Stats, error) {
 	var result []*Stats
@@ -319,7 +323,7 @@ func (c *Client) GetRecentStats() ([]*Stats, error) {
 	return result, err
 }
 
-// Historical data is only available for prior months,
+// GetHistoricalSummary Historical data is only available for prior months,
 // starting with January 2014.
 // If date IsZero(), returns the prior month's data.
 func (c *Client) GetHistoricalSummary(date time.Time) (*HistoricalSummary, error) {
@@ -337,7 +341,7 @@ type historicalSummaryRequest struct {
 	Date string `url:"date,omitempty"`
 }
 
-// This call will return daily stats for a given month or day.
+// GetHistoricalDaily This call will return daily stats for a given month or day.
 // Historical data is only available for prior months, starting with January 2014.
 func (c *Client) GetHistoricalDaily(req *HistoricalDailyRequest) ([]*Stats, error) {
 	var result []*Stats
@@ -345,6 +349,7 @@ func (c *Client) GetHistoricalDaily(req *HistoricalDailyRequest) ([]*Stats, erro
 	return result, err
 }
 
+// HistoricalDailyRequest holds optional data either for Date or Last
 type HistoricalDailyRequest struct {
 	// Option 1: Value needs to be in four-digit year, two-digit
 	// month format (YYYYMM) (i.e January 2017 would be written as 201701)
@@ -391,7 +396,7 @@ func (c *Client) GetNews(symbol string) ([]*News, error) {
 	return result, err
 }
 
-// GetStockQUotes returns a map of quotes for the given symbols.
+// GetStockQuotes returns a map of quotes for the given symbols.
 //
 // A maximumum of 100 symbols may be requested.
 func (c *Client) GetStockQuotes(symbols []string) (map[string]*StockQuote, error) {
@@ -423,14 +428,14 @@ func (c *Client) GetList(list string) ([]*StockQuote, error) {
 	return result, err
 }
 
-// GetCompany
+// GetCompany gets company information
 func (c *Client) GetCompany(symbol string) (*Company, error) {
 	var result *Company
 	err := c.getJSON("/stock/"+symbol+"/company", nil, &result)
 	return result, err
 }
 
-// GetDividends
+// GetDividends gets last 5 years of dividends
 func (c *Client) GetDividends(symbol string) ([]*Dividends, error) {
 	var result []*Dividends
 	err := c.getJSON("/stock/"+symbol+"/dividends/5y", nil, &result)
