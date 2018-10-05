@@ -152,6 +152,219 @@ func TestBook(t *testing.T) {
 	}
 }
 
+func TestGetTrades(t *testing.T) {
+	body := `{
+	"AAPL": [],
+	"FB": []
+}`
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbols := []string{"AAPL", "FB"}
+	last := 1
+
+	result, err := c.GetTrades(symbols, last)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) != len(symbols) {
+		t.Fatalf("Number of symbols returned %d, not equal to requested %d",
+			len(result), len(symbols))
+	}
+}
+
+func TestGetSystemEvents(t *testing.T) {
+	body := `{
+	"AAPL": {
+		"systemEvent": "R",
+		"timestamp": 1494627280251
+	},
+	"FB": {
+		"systemEvent": "R",
+		"timestamp": 1494627280251
+	}
+}`
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbols := []string{"AAPL", "FB"}
+
+	result, err := c.GetSystemEvents(symbols)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) != len(symbols) {
+		t.Fatalf("Number of symbols returned %d, not equal to requested %d",
+			len(result), len(symbols))
+	}
+}
+
+func TestGetTradingStatus(t *testing.T) {
+	body := `{
+	"AAPL": {
+		"status": "T",
+    "reason": "NA",
+    "timestamp": 1494588017687
+	},
+	"FB": {
+		"status": "T",
+    "reason": "NA",
+    "timestamp": 1494588017687
+	}
+}`
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbols := []string{"AAPL", "FB"}
+
+	result, err := c.GetTradingStatus(symbols)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) != len(symbols) {
+		t.Fatalf("Number of symbols returned %d, not equal to requested %d",
+			len(result), len(symbols))
+	}
+}
+
+func TestGetOperationalHaltStatus(t *testing.T) {
+	body := `{
+	"AAPL": {
+		"isHalted": false,
+    "timestamp": 1494588017687
+	},
+	"FB": {
+		"isHalted": false,
+    "timestamp": 1494588017687
+	}
+}`
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbols := []string{"AAPL", "FB"}
+
+	result, err := c.GetOperationalHaltStatus(symbols)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) != len(symbols) {
+		t.Fatalf("Number of symbols returned %d, not equal to requested %d",
+			len(result), len(symbols))
+	}
+}
+
+func TestGetShortSaleRestriction(t *testing.T) {
+	body := `{
+	"AAPL": {
+    "isSSR": true,
+    "detail": "N",
+    "timestamp": 1494588094067
+	},
+	"FB": {
+    "isSSR": true,
+    "detail": "N",
+    "timestamp": 1494588094067
+	}
+}`
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbols := []string{"AAPL", "FB"}
+
+	result, err := c.GetShortSaleRestriction(symbols)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) != len(symbols) {
+		t.Fatalf("Number of symbols returned %d, not equal to requested %d",
+			len(result), len(symbols))
+	}
+}
+
+func TestGetSecurityEvents(t *testing.T) {
+	body := `{
+	"AAPL": {
+    "securityEvent": "MarketOpen",
+    "timestamp": 1494595800005
+	},
+	"FB": {
+    "securityEvent": "MarketOpen",
+    "timestamp": 1494595800005
+	}
+}`
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbols := []string{"AAPL", "FB"}
+
+	result, err := c.GetSecurityEvents(symbols)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) != len(symbols) {
+		t.Fatalf("Number of symbols returned %d, not equal to requested %d",
+			len(result), len(symbols))
+	}
+}
+
+func TestTradeBreaks(t *testing.T) {
+	body := `{
+	"AAPL": [
+		{
+      "price": 156.1,
+      "size": 100,
+      "tradeId": 517341294,
+      "isISO": false,
+      "isOddLot": false,
+      "isOutsideRegularHours": false,
+      "isSinglePriceCross": false,
+      "isTradeThroughExempt": false,
+      "timestamp": 1494619192003
+		}
+	],
+	"FB": [
+ 		{
+      "price": 156.1,
+      "size": 100,
+      "tradeId": 517341294,
+      "isISO": false,
+      "isOddLot": false,
+      "isOutsideRegularHours": false,
+      "isSinglePriceCross": false,
+      "isTradeThroughExempt": false,
+      "timestamp": 1494619192003
+		}
+	]
+}`
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbols := []string{"AAPL", "FB"}
+	last := 1
+
+	result, err := c.GetTradeBreaks(symbols, last)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) != len(symbols) {
+		t.Fatalf("Number of symbols returned %d, not equal to requested %d",
+			len(result), len(symbols))
+	}
+}
+
 func TestSymbols(t *testing.T) {
 	c := setupTestClient()
 	symbols, err := c.GetSymbols()
