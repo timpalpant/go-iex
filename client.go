@@ -203,7 +203,10 @@ type tradingStatusRequest struct {
 	Symbols []string `url:"symbols,comma,omitempty"`
 }
 
-// GetOperationalHaltStatus The Exchange may suspend trading of one or more securities on IEX
+// GetOperationalHaltStatus gets all of the instances where the
+// security were halted
+//
+// The Exchange may suspend trading of one or more securities on IEX
 // for operational reasons and indicates such operational halt using
 // the Operational halt status message.
 //
@@ -308,7 +311,7 @@ func (c *Client) GetSymbols() ([]*Symbol, error) {
 	return result, err
 }
 
-// GetIntradayStats gets intra day volume and priceing data
+// GetIntradayStats gets intra day volume and pricing data
 func (c *Client) GetIntradayStats() (*IntradayStats, error) {
 	var result *IntradayStats
 	err := c.getJSON("/stats/intraday", nil, &result)
