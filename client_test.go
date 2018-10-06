@@ -379,7 +379,7 @@ func TestTradeBreaks(t *testing.T) {
 	}
 }
 
-func TestSymbols(t *testing.T) {
+func TestGetSymbols(t *testing.T) {
 	c := setupTestClient()
 	symbols, err := c.GetSymbols()
 	if err != nil {
@@ -393,6 +393,74 @@ func TestSymbols(t *testing.T) {
 	symbol := symbols[0]
 	if symbol.Symbol == "" || symbol.Name == "" || symbol.Date == "" {
 		t.Fatal("Failed to decode symbol correctly")
+	}
+}
+
+func TestGetIntradayStats(t *testing.T) {
+	// this file contains data from here:
+	// https://api.iextrading.com/1.0/stats/intraday
+	body, err := readTestData("stats_intraday.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	result, err := c.GetIntradayStats()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result == nil {
+		t.Fatalf("result was unexpectedly nil")
+	}
+}
+
+func TestGetRecentStats(t *testing.T) {
+	// NOTE: this test is on hold until an upstream bug is handled
+	// ticket for reference: https://github.com/timpalpant/go-iex/issues/21
+	t.Skip("refer to ticket https://github.com/timpalpant/go-iex/issues/21")
+	// this file contains data from here:
+	// https://api.iextrading.com/1.0/stats/recent
+	// body, err := readTestData("stats_recent.json")
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	// httpc := mockHTTPClient{body: body, code: 200}
+	// c := NewClient(&httpc)
+
+	// result, err := c.GetRecentStats()
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	// if result == nil {
+	// 	t.Fatalf("result was unexpectedly nil")
+	// }
+}
+
+func TestGetNews(t *testing.T) {
+	// this file contains data from here:
+	// https://api.iextrading.com/1.0/stock/aapl/news
+	body, err := readTestData("news.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbol := "AAPL"
+
+	result, err := c.GetNews(symbol)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) == 0 {
+		t.Fatalf("Number 0 news results returned")
 	}
 }
 
@@ -417,6 +485,52 @@ func TestGetStockQuotes(t *testing.T) {
 	if len(result) != len(symbols) {
 		t.Fatalf("Number of symbols returned %d, not equal to requested %d",
 			len(result), len(symbols))
+	}
+}
+
+func TestGetList(t *testing.T) {
+	// this file contains data from here:
+	// https://api.iextrading.com/1.0/stock/aapl/company
+	body, err := readTestData("gainers.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	listName := "gainers"
+
+	result, err := c.GetList(listName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result == nil {
+		t.Fatalf("results are nil for list %s", listName)
+	}
+}
+
+func TestGetCompany(t *testing.T) {
+	// this file contains data from here:
+	// https://api.iextrading.com/1.0/stock/aapl/company
+	body, err := readTestData("company.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbol := "AAPL"
+
+	result, err := c.GetCompany(symbol)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Symbol != symbol {
+		t.Fatalf("unable to get correct symbol")
 	}
 }
 
@@ -456,6 +570,29 @@ func TestMarkets(t *testing.T) {
 	}
 }
 
+func TestGetHistoricalSummary(t *testing.T) {
+	// this file contains data from here:
+	// https://api.iextrading.com/1.0/stats/historical
+	body, err := readTestData("stats_historic.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	period := time.Now()
+
+	result, err := c.GetHistoricalSummary(period)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result == nil {
+		t.Fatalf("got unexpected nil result")
+	}
+}
+
 func TestGetHistoricalDaily(t *testing.T) {
 	c := setupTestClient()
 	stats, err := c.GetHistoricalDaily(&HistoricalDailyRequest{Last: 5})
@@ -465,5 +602,51 @@ func TestGetHistoricalDaily(t *testing.T) {
 
 	if len(stats) != 5 {
 		t.Fatalf("Received %d historical daily stats, expected %d", len(stats), 5)
+	}
+}
+
+func TestGetKeyStats(t *testing.T) {
+	// this file contains data from here:
+	// https://api.iextrading.com/1.0/stock/aapl/stats
+	body, err := readTestData("key_stats.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbol := "AAPL"
+
+	result, err := c.GetKeyStats(symbol)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result == nil {
+		t.Fatalf("got unexpected nil result")
+	}
+}
+
+func TestGetChart(t *testing.T) {
+	// this file contains data from here:
+	// https://api.iextrading.com/1.0/stock/aapl/chart
+	body, err := readTestData("chart.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbol := "AAPL"
+
+	result, err := c.GetChart(symbol, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) == 0 {
+		t.Fatalf("got unexpected empty result")
 	}
 }
