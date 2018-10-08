@@ -322,13 +322,13 @@ func (c *Client) GetRecentStats() ([]*Stats, error) {
 // Historical data is only available for prior months,
 // starting with January 2014.
 // If date IsZero(), returns the prior month's data.
-func (c *Client) GetHistoricalSummary(date time.Time) (*[]HistoricalSummary, error) {
+func (c *Client) GetHistoricalSummary(date time.Time) ([]*HistoricalSummary, error) {
 	req := &historicalSummaryRequest{}
 	if !date.IsZero() {
 		req.Date = date.Format("20060102")
 	}
 
-	var result *[]HistoricalSummary
+	var result []*HistoricalSummary
 	err := c.getJSON("/stats/historical", req, &result)
 	return result, err
 }
