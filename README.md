@@ -4,6 +4,7 @@ A Go library for accessing the IEX Developer API.
 [![GoDoc](https://godoc.org/github.com/timpalpant/go-iex?status.svg)](http://godoc.org/github.com/timpalpant/go-iex)
 [![Build Status](https://travis-ci.org/timpalpant/go-iex.svg?branch=master)](https://travis-ci.org/timpalpant/go-iex)
 [![Coverage Status](https://coveralls.io/repos/timpalpant/go-iex/badge.svg?branch=master&service=github)](https://coveralls.io/github/timpalpant/go-iex?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/timpalpant/go-iex)](https://goreportcard.com/badge/github.com/timpalpant/go-iex)
 
 go-iex is a library to access the [IEX Developer API](https://www.iextrading.com/developer/docs/) from [Go](http://www.golang.org).
 It provides a thin wrapper for working with the JSON REST endpoints and [IEXTP1 pcap data](https://www.iextrading.com/trading/market-data/#specifications).
