@@ -418,27 +418,24 @@ func TestGetIntradayStats(t *testing.T) {
 }
 
 func TestGetRecentStats(t *testing.T) {
-	// NOTE: this test is on hold until an upstream bug is handled
-	// ticket for reference: https://github.com/timpalpant/go-iex/issues/21
-	t.Skip("refer to ticket https://github.com/timpalpant/go-iex/issues/21")
 	// this file contains data from here:
 	// https://api.iextrading.com/1.0/stats/recent
-	// body, err := readTestData("stats_recent.json")
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
+	body, err := readTestData("stats_recent.json")
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// httpc := mockHTTPClient{body: body, code: 200}
-	// c := NewClient(&httpc)
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
 
-	// result, err := c.GetRecentStats()
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
+	result, err := c.GetRecentStats()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// if result == nil {
-	// 	t.Fatalf("result was unexpectedly nil")
-	// }
+	if result == nil {
+		t.Fatalf("result was unexpectedly nil")
+	}
 }
 
 func TestGetNews(t *testing.T) {
