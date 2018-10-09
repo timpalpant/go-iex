@@ -1,5 +1,10 @@
 package iex
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 const IEXTP1 = "IEXTP1"
 
 const (
@@ -249,9 +254,44 @@ type Stats struct {
 	// Refers to IEX’s percentage of total US Equity market volume.
 	MarketShare float64
 	// Will be true if the trading day is a half day.
-	IsHalfDay int
+	IsHalfDay bool
 	// Refers to the number of lit shares traded on IEX (single-counted).
 	LitVolume int
+}
+
+type intBool bool
+
+func (bit *intBool) UnmarshalJSON(data []byte) error {
+	asString := string(data)
+	if asString == "1" || asString == "true" {
+		*bit = true
+	} else if asString == "0" || asString == "false" {
+		*bit = false
+	} else {
+		return fmt.Errorf("boolean unmarshal error: invalid input %s", asString)
+	}
+
+	return nil
+}
+
+// UnmarshalJSON customizes JSON unmarshalling for the Stats
+// type to be able to decode either 0/1 or true/false in the
+// IsHalfDay field (see: https://github.com/timpalpant/go-iex/issues/21).
+func (s *Stats) UnmarshalJSON(data []byte) error {
+	type Alias Stats
+	tmp := &struct {
+		IsHalfDay intBool
+		*Alias
+	}{
+		Alias: (*Alias)(s),
+	}
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	s.IsHalfDay = bool(tmp.IsHalfDay)
+	return nil
 }
 
 type Records struct {
