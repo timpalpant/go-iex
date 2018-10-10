@@ -11,6 +11,7 @@ import (
 )
 
 const baseEndpoint = "https://api.iextrading.com/1.0"
+const baseWebsocket = "https://ws-api.iextrading.com/1.0"
 
 // HTTPClient an interface to describe simple requests to a url
 type HTTPClient interface {
@@ -37,8 +38,31 @@ func NewClient(client HTTPClient) *Client {
 func (c *Client) GetTOPS(symbols []string) ([]*TOPS, error) {
 	req := &topsRequest{symbols}
 	var result []*TOPS
-	err := c.getJSON("/tops", req, &result)
+	err := c.getJSON("/tops", false, req, &result)
 	return result, err
+}
+
+// GetRealTimeTOPS sets up a long polling socket to get real time tops data
+func (c *Client) GetRealTimeTOPS(symbols []string) (chan []*TOPS, chan error) {
+	out := make(chan []*TOPS)
+	errOut := make(chan error)
+	go func() {
+		for {
+			req := &topsRequest{symbols}
+			var result []*TOPS
+			err := c.getJSON("/tops", true, req, &result)
+			if err != nil {
+				close(out)
+				errOut <- err
+				close(errOut)
+				return
+			}
+
+			out <- result
+		}
+	}()
+
+	return out, nil
 }
 
 type topsRequest struct {
@@ -55,7 +79,7 @@ type topsRequest struct {
 func (c *Client) GetLast(symbols []string) ([]*Last, error) {
 	req := &lastRequest{symbols}
 	var result []*Last
-	err := c.getJSON("/tops/last", req, &result)
+	err := c.getJSON("/tops/last", false, req, &result)
 	return result, err
 }
 
@@ -74,7 +98,7 @@ func (c *Client) GetHIST(date time.Time) ([]*HIST, error) {
 	}
 
 	var result []*HIST
-	err := c.getJSON("/hist", req, &result)
+	err := c.getJSON("/hist", false, req, &result)
 	return result, err
 }
 
@@ -86,7 +110,7 @@ type histRequest struct {
 // Returns a map of date string "20060102" -> HIST data for that date.
 func (c *Client) GetAllAvailableHIST() (map[string][]*HIST, error) {
 	var result map[string][]*HIST
-	err := c.getJSON("/hist", nil, &result)
+	err := c.getJSON("/hist", false, nil, &result)
 	return result, err
 }
 
@@ -103,7 +127,7 @@ func (c *Client) GetAllAvailableHIST() (map[string][]*HIST, error) {
 func (c *Client) GetDEEP(symbol string) (*DEEP, error) {
 	req := &deepRequest{symbol}
 	result := &DEEP{}
-	err := c.getJSON("/deep", req, &result)
+	err := c.getJSON("/deep", false, req, &result)
 	return result, err
 }
 
@@ -117,7 +141,7 @@ type deepRequest struct {
 func (c *Client) GetBook(symbols []string) (map[string]*Book, error) {
 	req := &bookRequest{symbols}
 	var result map[string]*Book
-	err := c.getJSON("/deep/book", req, &result)
+	err := c.getJSON("/deep/book", false, req, &result)
 	return result, err
 }
 
@@ -134,7 +158,7 @@ type bookRequest struct {
 func (c *Client) GetTrades(symbols []string, last int) (map[string][]*Trade, error) {
 	req := &tradesRequest{symbols, last}
 	var result map[string][]*Trade
-	err := c.getJSON("/deep/trades", req, &result)
+	err := c.getJSON("/deep/trades", false, req, &result)
 	return result, err
 }
 
@@ -153,7 +177,7 @@ type tradesRequest struct {
 func (c *Client) GetSystemEvents(symbols []string) (map[string]*SystemEvent, error) {
 	req := &systemEventRequest{symbols}
 	var result map[string]*SystemEvent
-	err := c.getJSON("/deep/system-event", req, &result)
+	err := c.getJSON("/deep/system-event", false, req, &result)
 	return result, err
 }
 
@@ -195,7 +219,7 @@ type systemEventRequest struct {
 func (c *Client) GetTradingStatus(symbols []string) (map[string]*TradingStatusMessage, error) {
 	req := &tradingStatusRequest{symbols}
 	var result map[string]*TradingStatusMessage
-	err := c.getJSON("/deep/trading-status", req, &result)
+	err := c.getJSON("/deep/trading-status", false, req, &result)
 	return result, err
 }
 
@@ -227,7 +251,7 @@ type tradingStatusRequest struct {
 func (c *Client) GetOperationalHaltStatus(symbols []string) (map[string]*OpHaltStatus, error) {
 	req := &opHaltStatusRequest{symbols}
 	var result map[string]*OpHaltStatus
-	err := c.getJSON("/deep/op-halt-status", req, &result)
+	err := c.getJSON("/deep/op-halt-status", false, req, &result)
 	return result, err
 }
 
@@ -251,7 +275,7 @@ type opHaltStatusRequest struct {
 func (c *Client) GetShortSaleRestriction(symbols []string) (map[string]*SSRStatus, error) {
 	req := &ssrStatusRequest{symbols}
 	var result map[string]*SSRStatus
-	err := c.getJSON("/deep/ssr-status", req, &result)
+	err := c.getJSON("/deep/ssr-status", false, req, &result)
 	return result, err
 }
 
@@ -267,7 +291,7 @@ type ssrStatusRequest struct {
 func (c *Client) GetSecurityEvents(symbols []string) (map[string]*SecurityEventMessage, error) {
 	req := &securityEventRequest{symbols}
 	var result map[string]*SecurityEventMessage
-	err := c.getJSON("/deep/security-event", req, &result)
+	err := c.getJSON("/deep/security-event", false, req, &result)
 	return result, err
 }
 
@@ -284,7 +308,7 @@ type securityEventRequest struct {
 func (c *Client) GetTradeBreaks(symbols []string, last int) (map[string][]*TradeBreak, error) {
 	req := &tradeBreaksRequest{symbols, last}
 	var result map[string][]*TradeBreak
-	err := c.getJSON("/deep/trade-breaks", req, &result)
+	err := c.getJSON("/deep/trade-breaks", false, req, &result)
 	return result, err
 }
 
@@ -298,7 +322,7 @@ type tradeBreaksRequest struct {
 // 7:45 a.m. to 5:15 p.m. ET.
 func (c *Client) GetMarkets() ([]*Market, error) {
 	var result []*Market
-	err := c.getJSON("/market", nil, &result)
+	err := c.getJSON("/market", false, nil, &result)
 	return result, err
 }
 
@@ -307,14 +331,14 @@ func (c *Client) GetMarkets() ([]*Market, error) {
 // or removed by IEX after the list was produced.
 func (c *Client) GetSymbols() ([]*Symbol, error) {
 	var result []*Symbol
-	err := c.getJSON("/ref-data/symbols", nil, &result)
+	err := c.getJSON("/ref-data/symbols", false, nil, &result)
 	return result, err
 }
 
 // GetIntradayStats gets intra day volume and pricing data
 func (c *Client) GetIntradayStats() (*IntradayStats, error) {
 	var result *IntradayStats
-	err := c.getJSON("/stats/intraday", nil, &result)
+	err := c.getJSON("/stats/intraday", false, nil, &result)
 	return result, err
 }
 
@@ -322,7 +346,7 @@ func (c *Client) GetIntradayStats() (*IntradayStats, error) {
 // to all trading days of the current month.
 func (c *Client) GetRecentStats() ([]*Stats, error) {
 	var result []*Stats
-	err := c.getJSON("/stats/recent", nil, &result)
+	err := c.getJSON("/stats/recent", false, nil, &result)
 	return result, err
 }
 
@@ -336,7 +360,7 @@ func (c *Client) GetHistoricalSummary(date time.Time) ([]*HistoricalSummary, err
 	}
 
 	var result []*HistoricalSummary
-	err := c.getJSON("/stats/historical", req, &result)
+	err := c.getJSON("/stats/historical", false, req, &result)
 	return result, err
 }
 
@@ -348,7 +372,7 @@ type historicalSummaryRequest struct {
 // Historical data is only available for prior months, starting with January 2014.
 func (c *Client) GetHistoricalDaily(req *HistoricalDailyRequest) ([]*Stats, error) {
 	var result []*Stats
-	err := c.getJSON("/stats/historical/daily", req, &result)
+	err := c.getJSON("/stats/historical/daily", false, req, &result)
 	return result, err
 }
 
@@ -370,7 +394,7 @@ type HistoricalDailyRequest struct {
 // GetKeyStats returns key statistics for a symbol.
 func (c *Client) GetKeyStats(symbol string) (*KeyStats, error) {
 	var result *KeyStats
-	err := c.getJSON("/stock/"+symbol+"/stats", nil, &result)
+	err := c.getJSON("/stock/"+symbol+"/stats", false, nil, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -395,7 +419,7 @@ func (c *Client) GetKeyStats(symbol string) (*KeyStats, error) {
 // GetNews returns news items for a symbol. Use "market" to receive global market news.
 func (c *Client) GetNews(symbol string) ([]*News, error) {
 	var result []*News
-	err := c.getJSON("/stock/"+symbol+"/news", nil, &result)
+	err := c.getJSON("/stock/"+symbol+"/news", false, nil, &result)
 	return result, err
 }
 
@@ -405,7 +429,7 @@ func (c *Client) GetNews(symbol string) ([]*News, error) {
 func (c *Client) GetStockQuotes(symbols []string) (map[string]*StockQuote, error) {
 	req := &stockQuotesRequest{symbols, "quote"}
 	var qresult map[string]map[string]*StockQuote
-	err := c.getJSON("/stock/market/batch", req, &qresult)
+	err := c.getJSON("/stock/market/batch", false, req, &qresult)
 	if err != nil {
 		return nil, err
 	}
@@ -427,21 +451,21 @@ type stockQuotesRequest struct {
 // See: https://iextrading.com/developer/docs/#list
 func (c *Client) GetList(list string) ([]*StockQuote, error) {
 	var result []*StockQuote
-	err := c.getJSON("/stock/market/list/"+list+"?displayPercent=true", nil, &result)
+	err := c.getJSON("/stock/market/list/"+list+"?displayPercent=true", false, nil, &result)
 	return result, err
 }
 
 // GetCompany gets company information
 func (c *Client) GetCompany(symbol string) (*Company, error) {
 	var result *Company
-	err := c.getJSON("/stock/"+symbol+"/company", nil, &result)
+	err := c.getJSON("/stock/"+symbol+"/company", false, nil, &result)
 	return result, err
 }
 
 // GetDividends gets last 5 years of dividends
 func (c *Client) GetDividends(symbol string) ([]*Dividends, error) {
 	var result []*Dividends
-	err := c.getJSON("/stock/"+symbol+"/dividends/5y", nil, &result)
+	err := c.getJSON("/stock/"+symbol+"/dividends/5y", false, nil, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -468,12 +492,12 @@ func (c *Client) GetDividends(symbol string) ([]*Dividends, error) {
 // See: https://iextrading.com/developer/docs/#chart
 func (c *Client) GetChart(symbol string, daterange string) ([]*Chart, error) {
 	var result []*Chart
-	err := c.getJSON("/stock/"+symbol+"/chart/"+daterange, nil, &result)
+	err := c.getJSON("/stock/"+symbol+"/chart/"+daterange, false, nil, &result)
 	return result, err
 }
 
-func (c *Client) getJSON(route string, request interface{}, response interface{}) error {
-	url := c.endpoint(route)
+func (c *Client) getJSON(route string, websocket bool, request interface{}, response interface{}) error {
+	url := c.endpoint(route, websocket)
 
 	values, err := query.Values(request)
 	if err != nil {
@@ -499,6 +523,9 @@ func (c *Client) getJSON(route string, request interface{}, response interface{}
 	return dec.Decode(response)
 }
 
-func (c *Client) endpoint(route string) string {
+func (c *Client) endpoint(route string, websocket bool) string {
+	if websocket {
+		return baseWebsocket + route
+	}
 	return baseEndpoint + route
 }
