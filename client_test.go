@@ -2,6 +2,7 @@ package iex
 
 import (
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,13 +18,13 @@ type mockHTTPClient struct {
 
 func (c *mockHTTPClient) Get(url string) (*http.Response, error) {
 	w := httptest.NewRecorder()
+	// write header has to be above body to write the right status code
+	w.WriteHeader(c.code)
 	w.WriteString(c.body)
 
 	for key, value := range c.headers {
 		w.Header().Add(key, value)
 	}
-
-	w.WriteHeader(c.code)
 
 	resp := w.Result()
 	return resp, c.err
@@ -74,6 +75,64 @@ func TestTOPS_AllSymbols(t *testing.T) {
 		if len(result) != len(tt.symbols) {
 			t.Fatalf("Received %v results, expected %v", len(result), len(tt.symbols))
 		}
+	}
+}
+
+func TestGetRealTimeTOPS_Success(t *testing.T) {
+	// this file contains data from here:
+	// https://ws-api.iextrading.com/1.0/tops?symbols=aapl,fb
+	body, err := readTestData("tops.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbols := []string{"FB", "AAPL"}
+
+	resultChan, errChan := c.GetRealTimeTOPS(symbols)
+
+	go func() {
+		err := <-errChan
+		if err != nil {
+			close(errChan)
+			close(resultChan)
+			t.Fatal(err)
+		}
+	}()
+
+	result := <-resultChan
+
+	if result == nil {
+		t.Fatal("result was unexpectedly nil")
+	}
+
+	log.Println(result)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 results got %d", len(result))
+	}
+}
+
+func TestGetRealTimeTOPS_Error(t *testing.T) {
+	httpc := mockHTTPClient{body: "[]", code: 500}
+	c := NewClient(&httpc)
+
+	symbols := []string{"FB", "AAPL"}
+
+	resultChan, errChan := c.GetRealTimeTOPS(symbols)
+
+	go func() {
+		err := <-errChan
+		if err != nil {
+			close(errChan)
+			close(resultChan)
+		}
+	}()
+
+	result := <-resultChan
+
+	if result != nil {
+		t.Fatal("result was unexpectedly not nil")
 	}
 }
 
