@@ -2,6 +2,7 @@ package iex
 
 import (
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -71,4 +72,71 @@ func testPcapScanner(t *testing.T, filename string) int {
 	}
 
 	return count
+}
+
+func TestUDPScanner(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping UDP test in short mode.")
+	}
+
+	nPacketsToSend := 100
+	packetConn, err := net.ListenPacket("udp", "127.0.0.1:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer packetConn.Close()
+	packetSource := NewPacketConnDataSource(packetConn)
+	t.Logf("Listing on udp://%s", packetConn.LocalAddr())
+
+	// Replay the given pcap dump to the given UDP address.
+	testFilename := filepath.Join("testdata", "DEEP10.pcap.gz")
+	go udpReplay(t, testFilename, packetConn.LocalAddr(), nPacketsToSend)
+
+	time.Sleep(time.Second)
+	t.Log("Scanning UDP packets")
+	scanner := NewPcapScanner(packetSource)
+	for i := 0; i < nPacketsToSend; i++ {
+		if _, err := scanner.NextMessage(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// Replays all packets in the given pcap filename to the given address.
+func udpReplay(t *testing.T, pcapFilename string, addr net.Addr, nPacketsToSend int) {
+	t.Log("Dialing: ", addr)
+	conn, err := net.DialTimeout("udp", addr.String(), time.Second)
+	if err != nil {
+		t.Fatal("could not connect to server: ", err)
+	}
+	defer conn.Close()
+
+	f, err := os.Open(pcapFilename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	packetSource, err := NewPcapDataSource(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("Replaying first %d packets from %s", nPacketsToSend, pcapFilename)
+	for i := 0; i < nPacketsToSend; i++ {
+		payload, err := packetSource.NextPayload()
+		if err != nil {
+			if err == io.EOF {
+				return
+			}
+
+			t.Fatal("could not write payload to server:", err)
+			return
+		}
+
+		if _, err := conn.Write(payload); err != nil {
+			t.Fatal("could not write payload to server:", err)
+			return
+		}
+	}
 }
