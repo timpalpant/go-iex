@@ -9,7 +9,6 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
-	"github.com/kor44/pcapng"
 
 	"github.com/timpalpant/go-iex/iextp"
 	_ "github.com/timpalpant/go-iex/iextp/deep"
@@ -53,7 +52,7 @@ func NewPacketDataSource(r io.Reader) (PacketDataSource, error) {
 
 	var packetSource PacketDataSource
 	if magic == pcapNGMagic {
-		packetSource, err = pcapng.NewReader(input)
+		packetSource, err = pcapgo.NewNgReader(input, pcapgo.DefaultNgReaderOptions)
 	} else {
 		packetSource, err = pcapgo.NewReader(input)
 	}

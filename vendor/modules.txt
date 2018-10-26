@@ -1,10 +1,14 @@
 # github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135
 github.com/google/go-querystring/query
-# github.com/google/gopacket v1.1.14
+# github.com/google/gopacket v1.1.16-0.20181023151400-a35e09f9f224
 github.com/google/gopacket
 github.com/google/gopacket/layers
 github.com/google/gopacket/pcapgo
-# github.com/kor44/pcapng v0.0.0-20180516064813-58a5fa376ac6
-github.com/kor44/pcapng
-# github.com/pkg/errors v0.8.0
-github.com/pkg/errors
+# github.com/johnmccabe/go-bitbar v0.4.0
+github.com/johnmccabe/go-bitbar
+# github.com/mdlayher/raw v0.0.0-20181016155347-fa5ef3332ca9
+github.com/mdlayher/raw
+# golang.org/x/net v0.0.0-20181023162649-9b4f9f5ad519
+golang.org/x/net/bpf
+# golang.org/x/sys v0.0.0-20181024145615-5cd93ef61a7c
+golang.org/x/sys/unix
