@@ -112,7 +112,7 @@ func main() {
 	}
 	defer resp.Body.Close()
 
-	packetDataSource, err := iex.NewPacketDataSource(resp.Body)
+	packetDataSource, err := iex.NewPcapDataSource(resp.Body)
 	if err != nil {
 		panic(err)
 	}
@@ -140,6 +140,59 @@ func main() {
 }
 ```
 
+### Iterate over data from a live multicast UDP stream of the DEEP feed.
+
+IEX's live multicast data can also be parsed using the `PcapScanner`.
+
+```Go
+package main
+
+import (
+	"encoding/json"
+	"io"
+	"net"
+	"os"
+
+	"github.com/timpalpant/go-iex"
+	"github.com/timpalpant/go-iex/iextp/deep"
+)
+
+func main() {
+        multicastAddress := "233.215.21.4:10378"
+	addr, err := net.ResolveUDPAddr("udp", multicastAddress)
+	if err != nil {
+	        panic(err)
+	}
+
+	conn, err := net.ListenMulticastUDP("udp", nil, addr)
+	if err != nil {
+	        panic(err)
+	}
+
+	packetDataSource := iex.NewPacketConnDataSource(conn)
+	pcapScanner := iex.NewPcapScanner(packetDataSource)
+
+	// Write each quote update message to stdout, in JSON format.
+	enc := json.NewEncoder(os.Stdout)
+
+	for {
+		msg, err := pcapScanner.NextMessage()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			panic(err)
+		}
+
+		switch msg := msg.(type) {
+		case *deep.PriceLevelUpdateMessage:
+			enc.Encode(msg)
+		default:
+		}
+	}
+}
+```
 ## Contributing
 
 Pull requests and issues are welcomed!
