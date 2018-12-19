@@ -464,7 +464,7 @@ type StockQuote struct {
 	MarketCap        int64   // is calculated in real time using calculationPrice.
 	PeRatio          float64 // is calculated in real time using calculationPrice.
 	Week52High       float64 // refers to the adjusted 52 week high.
-	Week52Low        float64 // refers to the adjusted 52 week low.
+	Week52Low        json.RawMessage // refers to the adjusted 52 week low.
 	YtdChange        float64 // refers to the price change percentage from start of year to previous close.
 }
 
