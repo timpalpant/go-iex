@@ -539,6 +539,34 @@ type Earning struct {
 	SymbolId               float64 // Represents the IEX id for the stock
 }
 
+type FinancialsReport struct {
+	Symbol     string
+	Financials []*Financial
+}
+
+type Financial struct {
+	ReportDate             string
+	GrossProfit            int64
+	CostOfRevenue          int64
+	OperatingRevenue       int64
+	TotalRevenue           int64
+	OperatingIncome        int64
+	NetIncome              int64
+	ResearchAndDevelopment int64
+	OperatingExpense       int64
+	CurrentAssets          int64
+	TotalAssets            int64
+	TotalLiabilities       int64
+	CurrentCash            int64
+	CurrentDebt            int64
+	TotalCash              int64
+	TotalDebt              int64
+	ShareholderEquity      int64
+	CashChange             int64
+	CashFlow               int64
+	OperatingGainsLosses   string
+}
+
 type Chart struct {
 	// Only available on 1d charts
 	Minute         string

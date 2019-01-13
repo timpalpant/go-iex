@@ -470,6 +470,17 @@ func (c *Client) GetEarnings(symbol string) (*EarningsReport, error) {
 	return result, nil
 }
 
+// GetFinancials Pulls income statement, balance sheet
+// and cash flow data from the four most recent reported quarters.
+func (c *Client) GetFinancials(symbol string) (*FinancialsReport, error) {
+	var result *FinancialsReport
+	err := c.getJSON("/stock/"+symbol+"/financials", nil, &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // GetChart retuns chart data for a symbol covering a date range.
 // Range can be: 5y 2y 1y ytd 6m 3d 1m 1d
 // Please note the 1d range returns different data than other formats.

@@ -584,6 +584,34 @@ func TestGetEarnings(t *testing.T) {
 	}
 }
 
+func TestGetFinancials(t *testing.T) {
+	// this file contains data from here:
+	// https://api.iextrading.com/1.0/stock/aapl/financials
+	body, err := readTestData("financials.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpc := mockHTTPClient{body: body, code: 200}
+	c := NewClient(&httpc)
+
+	symbol := "AAPL"
+
+	result, err := c.GetFinancials(symbol)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Symbol != symbol {
+		t.Fatalf("Returned unexpected symbol %s should be %s", result.Symbol, symbol)
+	}
+
+	financials := result.Financials
+	expected := 4
+	if len(financials) != expected {
+		t.Fatalf("Returned unexpected count %d should be %d", len(financials), expected)
+	}
+}
 func TestMarkets(t *testing.T) {
 	c := setupTestClient()
 	markets, err := c.GetMarkets()
