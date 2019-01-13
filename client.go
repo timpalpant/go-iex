@@ -471,10 +471,15 @@ func (c *Client) GetEarnings(symbol string) (*EarningsReport, error) {
 }
 
 // GetFinancials Pulls income statement, balance sheet
-// and cash flow data from the four most recent reported quarters.
-func (c *Client) GetFinancials(symbol string) (*FinancialsReport, error) {
+// and cash flow data from the four most recent reported periods.
+// The default period is "quarter", unless "annual" is provided
+func (c *Client) GetFinancials(symbol string, period_optional ...string) (*FinancialsReport, error) {
 	var result *FinancialsReport
-	err := c.getJSON("/stock/"+symbol+"/financials", nil, &result)
+	period := "quarter"
+	if len(period_optional) > 0 && period_optional[0] == "annual" {
+		period = "annual"
+	}
+	err := c.getJSON("/stock/"+symbol+"/financials"+"?period="+period, nil, &result)
 	if err != nil {
 		return nil, err
 	}
