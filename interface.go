@@ -518,6 +518,27 @@ type Dividends struct {
 	Indicated     float64     // refers to the indicated rate of the dividend
 }
 
+type EarningsReport struct {
+	Symbol   string
+	Earnings []*Earning
+}
+
+type Earning struct {
+	ActualEPS              float64 // Actual earnings per share for the period
+	ConsensusEPS           float64 // Consensus EPS estimate trend for the period
+	EstimatedEPS           float64 // Earnings per share estimate for the period
+	AnnounceTime           string  // Time of earnings announcement. BTO (Before open), DMT (During trading), AMC (After close)
+	NumberOfEstimates      float64 // Number of estimates for the period
+	EPSSurpriseDollar      float64 // Dollar amount of EPS surprise for the period
+	EPSReportDate          string  // Expected earnings report date YYYY-MM-DD
+	FiscalPeriod           string  // The fiscal quarter the earnings data applies to Q# YYYY
+	FiscalEndDate          string  // Date representing the company fiscal quarter end YYYY-MM-DD
+	YearAgo                float64 // Represents the EPS of the quarter a year ago
+	YearAgoChangePercent   float64 // Represents the percent difference between the quarter a year ago actualEPS and current period actualEPS.
+	EstimatedChangePercent float64 // Represents the percent difference between the quarter a year ago actualEPS and current period estimatedEPS.
+	SymbolId               float64 // Represents the IEX id for the stock
+}
+
 type Chart struct {
 	// Only available on 1d charts
 	Minute         string
