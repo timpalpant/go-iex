@@ -460,6 +460,32 @@ func (c *Client) GetDividends(symbol string) ([]*Dividends, error) {
 	return result, nil
 }
 
+// GetEarnings gets earnings from the four most recent reported quarters.
+func (c *Client) GetEarnings(symbol string) (*EarningsReport, error) {
+	var result *EarningsReport
+	err := c.getJSON("/stock/"+symbol+"/earnings", nil, &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetFinancials Pulls income statement, balance sheet
+// and cash flow data from the four most recent reported periods.
+// The default period is "quarter", unless "annual" is provided
+func (c *Client) GetFinancials(symbol string, period_optional ...string) (*FinancialsReport, error) {
+	var result *FinancialsReport
+	period := "quarter"
+	if len(period_optional) > 0 && period_optional[0] == "annual" {
+		period = "annual"
+	}
+	err := c.getJSON("/stock/"+symbol+"/financials"+"?period="+period, nil, &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // GetChart retuns chart data for a symbol covering a date range.
 // Range can be: 5y 2y 1y ytd 6m 3d 1m 1d
 // Please note the 1d range returns different data than other formats.
