@@ -21,7 +21,23 @@ func TestEncodeMessages(t *testing.T) {
 			So(string(encoded), ShouldStartWith, "2/1.0/tops,")
 		})
 		Convey("should return the correct suffix", func() {
-			So(string(encoded), ShouldEndWith, "[\"subscribe\",\"fb,snap\"]")
+			So(string(encoded),
+				ShouldEndWith, "[\"subscribe\",\"fb,snap\"]")
+		})
+	})
+	Convey("The unsubscribe message", t, func() {
+		message := NewUnsubscribeMessage([]string{"fb", "snap"})
+		reader := encoder.Encode(message)
+		encoded, err := ioutil.ReadAll(reader)
+		if err != nil {
+			t.Errorf("Error encoding subscribe: %s", err)
+		}
+		Convey("should return the correct prefix", func() {
+			So(string(encoded), ShouldStartWith, "2/1.0/tops,")
+		})
+		Convey("should return the correct suffix", func() {
+			So(string(encoded),
+				ShouldEndWith, "[\"unsubscribe\",\"fb,snap\"]")
 		})
 	})
 }

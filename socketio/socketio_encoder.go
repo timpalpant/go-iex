@@ -37,6 +37,24 @@ func (s *SubscribeMessage) getStringData() io.Reader {
 		"[\"subscribe\",\"" + strings.Join(s.symbols, ",") + "\"]")
 }
 
+// Used to unsubscribe to data for a given list of traded symbols.
+type UnsubscribeMessage struct {
+	symbols []string
+}
+
+func NewUnsubscribeMessage(symbols []string) *UnsubscribeMessage {
+	return &UnsubscribeMessage{symbols}
+}
+
+func (s *UnsubscribeMessage) getMessageType() string {
+	return "2"
+}
+
+func (s *UnsubscribeMessage) getStringData() io.Reader {
+	return strings.NewReader(
+		"[\"unsubscribe\",\"" + strings.Join(s.symbols, ",") + "\"]")
+}
+
 // Encodes messages to be sent to IEX via SocketIO.
 type SocketioEncoder struct {
 	namespace string

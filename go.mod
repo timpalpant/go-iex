@@ -1,6 +1,7 @@
 module github.com/timpalpant/go-iex
 
 require (
+	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/google/go-cmp v0.2.0 // indirect
 	github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135
 	github.com/google/gopacket v1.1.16-0.20181023151400-a35e09f9f224
