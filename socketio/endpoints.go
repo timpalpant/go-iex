@@ -56,6 +56,7 @@ func (e *iexEndpoint) Initialize() {
 	httpValues := e.httpUrl.Query()
 	httpValues.Set("EIO", "3")
 	httpValues.Set("transport", "polling")
+	httpValues.Set("b64", "1")
 	e.httpUrl.RawQuery = httpValues.Encode()
 
 	// Initialize the Websocket enpoint query params.

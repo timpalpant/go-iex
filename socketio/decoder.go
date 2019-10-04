@@ -105,7 +105,7 @@ func (n *NotJsonError) Error() string {
 // HTTP response data is message type, followed by an optional packet type
 // followed by JSON data. This function populates the passed in struct or
 // returns an error.
-func parseToJson(data string, v interface{}) error {
+func parseToJSON(data string, v interface{}) error {
 	minusTypes := data
 	if maybeProcessFirstChar("MessageType", minusTypes, v) {
 		minusTypes = minusTypes[1:]
@@ -129,7 +129,7 @@ func parseToJson(data string, v interface{}) error {
 // in structs. For each of the passed in structs, if they contain MessageType
 // or PacketType fields of type int, those fields will be populated with the
 // corresponding response values.
-func HttpToJSON(data io.Reader, v []interface{}) error {
+func HTTPToJSON(data io.Reader, v []interface{}) error {
 	bytes, err := ioutil.ReadAll(data)
 	if err != nil {
 		glog.Errorf("Could not read input data: %s", err)
@@ -144,7 +144,7 @@ func HttpToJSON(data io.Reader, v []interface{}) error {
 			glog.Infof("Subresponse: %s", data)
 			glog.Infof("Leftover: %s", leftover)
 		}
-		err := parseToJson(data, v[fillingIn])
+		err := parseToJSON(data, v[fillingIn])
 		if err != nil {
 			glog.Warningf(
 				"Unable to parse message: %s; %s", data, err)

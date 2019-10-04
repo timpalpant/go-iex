@@ -22,6 +22,7 @@ func TestIEXEndpoint(t *testing.T) {
 			values := to.Query()
 			So(values.Get("EIO"), ShouldEqual, "3")
 			So(values.Get("transport"), ShouldEqual, "polling")
+			So(values.Get("b64"), ShouldEqual, "1")
 		})
 		Convey("should have the correct base Websocket URL", func() {
 			endpoint := NewIEXEndpoint(func() string {

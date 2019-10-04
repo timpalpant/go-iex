@@ -30,23 +30,23 @@ func init() {
 }
 
 func TestUnsuccessfulDecoding(t *testing.T) {
-	Convey("HttpToJSON", t, func() {
+	Convey("HTTPToJSON", t, func() {
 		Convey("should error when the response is not JSON", func() {
 			data := strings.NewReader("just some data")
 			parsed := &fakeData{}
-			err := HttpToJSON(data, []interface{}{parsed})
+			err := HTTPToJSON(data, []interface{}{parsed})
 			So(err, ShouldNotBeNil)
 		})
 	})
 }
 
 func TestSuccessfulDecoding(t *testing.T) {
-	Convey("For a single message, HttpToJSON", t, func() {
+	Convey("For a single message, HTTPToJSON", t, func() {
 		Convey("should populate a single struct", func() {
 			data := strings.NewReader(
 				`{"foo": "baz", "bar": [4, 6]}`)
 			parsed := &fakeData{}
-			err := HttpToJSON(data, []interface{}{parsed})
+			err := HTTPToJSON(data, []interface{}{parsed})
 			So(err, ShouldBeNil)
 			So(parsed, ShouldResemble,
 				&fakeData{"baz", []int{4, 6}})
@@ -55,7 +55,7 @@ func TestSuccessfulDecoding(t *testing.T) {
 			data := strings.NewReader(
 				`44{"foo": "baz", "bar": [4, 6]}`)
 			parsed := &fakeData{}
-			err := HttpToJSON(data, []interface{}{parsed})
+			err := HTTPToJSON(data, []interface{}{parsed})
 			So(err, ShouldBeNil)
 			So(parsed, ShouldResemble,
 				&fakeData{"baz", []int{4, 6}})
@@ -64,7 +64,7 @@ func TestSuccessfulDecoding(t *testing.T) {
 			data := strings.NewReader(
 				`44{"foo": "baz", "bar": [4, 6]}`)
 			parsed := &fakeDataWithTypes{}
-			err := HttpToJSON(data, []interface{}{parsed})
+			err := HTTPToJSON(data, []interface{}{parsed})
 			So(err, ShouldBeNil)
 			So(parsed, ShouldResemble,
 				&fakeDataWithTypes{"baz", []int{4, 6}, 4, 4})
@@ -73,7 +73,7 @@ func TestSuccessfulDecoding(t *testing.T) {
 			data := strings.NewReader(
 				`44{"foo": "baz", "bar": [4, 6]}`)
 			parsed := &fakeDataWithTypes{}
-			err := HttpToJSON(data, []interface{}{parsed})
+			err := HTTPToJSON(data, []interface{}{parsed})
 			So(err, ShouldBeNil)
 			So(parsed, ShouldResemble,
 				&fakeDataWithTypes{"baz", []int{4, 6}, 4, 4})
@@ -81,7 +81,7 @@ func TestSuccessfulDecoding(t *testing.T) {
 		Convey("should populate only types", func() {
 			data := strings.NewReader(`44`)
 			parsed := &fakeDataWithTypes{}
-			err := HttpToJSON(data, []interface{}{parsed})
+			err := HTTPToJSON(data, []interface{}{parsed})
 			So(err, ShouldBeNil)
 			So(parsed, ShouldResemble,
 				&fakeDataWithTypes{"", []int(nil), 4, 4})
@@ -90,7 +90,7 @@ func TestSuccessfulDecoding(t *testing.T) {
 			data := strings.NewReader(
 				`31:44{"foo": "baz", "bar": [4, 6]}`)
 			parsed := &fakeDataWithTypes{}
-			err := HttpToJSON(data, []interface{}{parsed})
+			err := HTTPToJSON(data, []interface{}{parsed})
 			So(err, ShouldBeNil)
 			So(parsed, ShouldResemble,
 				&fakeDataWithTypes{"baz", []int{4, 6}, 4, 4})
@@ -99,13 +99,13 @@ func TestSuccessfulDecoding(t *testing.T) {
 	})
 }
 func TestSuccessfulDecodingMultipleMessages(t *testing.T) {
-	Convey("For a multiple messages, HttpToJSON", t, func() {
+	Convey("For a multiple messages, HTTPToJSON", t, func() {
 		Convey("should populate many structs", func() {
 			data := strings.NewReader(
 				`31:44{"foo": "baz", "bar": [4, 6]}31:44{"foo": "baz", "bar": [4, 6]}`)
 			parsedOne := &fakeData{}
 			parsedTwo := &fakeDataWithTypes{}
-			err := HttpToJSON(data,
+			err := HTTPToJSON(data,
 				[]interface{}{parsedOne, parsedTwo})
 			So(err, ShouldBeNil)
 			So(parsedOne, ShouldResemble,
