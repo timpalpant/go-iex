@@ -73,53 +73,6 @@ func (e *encodeError) Error() string {
 
 func (enc *strArrayEncoder) Encode(
 	m MessageType, p PacketType, v interface{}) (io.Reader, error) {
-	parts := make([]string, 0)
-	instance := reflect.ValueOf(v).Elem()
-	// For each of the fields in v, turn the value into a string and append
-	// it to parts. If the field is of type Array, join the elements using
-	// commas and then add the resulting string to parts. Complex types
-	// larger than Array cannot be converted and will result in an error.
-	for i := 0; i < instance.NumField(); i++ {
-		field := instance.Field(i)
-		// Skip unset fields.
-		if !field.IsValid() {
-			continue
-		}
-		kind := field.Kind()
-		_, disallowed := disallowedTypes[kind]
-		if disallowed {
-			return nil, &encodeError{fmt.Sprintf(
-				"Cannot encode type: %s", field.Type())}
-		}
-		if glog.V(3) {
-			glog.Infof("Encoding %s", field.String())
-		}
-		if kind != reflect.Array && kind != reflect.Slice {
-			parts = append(parts, fmt.Sprintf("%v",
-				field.Interface()))
-		}
-		if kind == reflect.Array || kind == reflect.Slice {
-			elemType := field.Type().Elem().Kind()
-			_, disallowed = disallowedTypes[elemType]
-			if disallowed {
-				return nil, &encodeError{fmt.Sprintf(
-					"Cannot encode Array type: %s",
-					field.Type())}
-			}
-			subParts := make([]string, 0)
-			for j := 0; j < field.Len(); j++ {
-				subParts = append(
-					subParts, fmt.Sprintf("%v",
-						field.Index(j).Interface()))
-			}
-			parts = append(parts, strings.Join(subParts, ","))
-		}
-	}
-	encoding, err := json.Marshal(parts)
-	if err != nil {
-		glog.Errorf("Failed to encode data as JSON: %s", err)
-		return nil, err
-	}
 	readers := make([]io.Reader, 0)
 	if m >= 0 {
 		readers = append(readers,
@@ -133,7 +86,70 @@ func (enc *strArrayEncoder) Encode(
 		readers = append(readers,
 			strings.NewReader(enc.namespace+","))
 	}
-	readers = append(readers, bytes.NewBuffer(encoding))
+	if v == nil {
+		return io.MultiReader(readers...), nil
+	}
+	parts := make([]string, 0)
+	instance := reflect.ValueOf(v).Elem()
+	// For each of the fields in v, turn the value into a string and append
+	// it to parts. If the field is of type Array, join the elements using
+	// commas and then add the resulting string to parts. Complex types
+	// larger than Array cannot be converted and will result in an error.
+	for i := 0; i < instance.NumField(); i++ {
+		field := instance.Field(i)
+		// Skip unset fields.
+		if field.IsZero() {
+			if glog.V(3) {
+				glog.Infof("Skipping unset field %s",
+					instance.Type().Field(i).Name)
+			}
+			continue
+		}
+		kind := field.Kind()
+		_, disallowed := disallowedTypes[kind]
+		if disallowed {
+			return nil, &encodeError{fmt.Sprintf(
+				"Cannot encode type: %s", field.Type())}
+		}
+		if glog.V(3) {
+			glog.Infof("Encoding %s", field.String())
+		}
+		if kind != reflect.Array && kind != reflect.Slice {
+			strEncoding := fmt.Sprintf("%v", field.Interface())
+			if len(strEncoding) > 0 {
+				parts = append(parts, strEncoding)
+			}
+		}
+		if kind == reflect.Array || kind == reflect.Slice {
+			elemType := field.Type().Elem().Kind()
+			_, disallowed = disallowedTypes[elemType]
+			if disallowed {
+				return nil, &encodeError{fmt.Sprintf(
+					"Cannot encode Array type: %s",
+					field.Type())}
+			}
+			subParts := make([]string, 0)
+			for j := 0; j < field.Len(); j++ {
+				strEncoding := fmt.Sprintf(
+					"%v", field.Index(j).Interface())
+				if len(strEncoding) > 0 {
+					subParts = append(subParts, strEncoding)
+				}
+			}
+			parts = append(parts, strings.Join(subParts, ","))
+		}
+	}
+	if glog.V(3) {
+		glog.Infof("Encoding parts: %v", parts)
+	}
+	encoding, err := json.Marshal(parts)
+	if err != nil {
+		glog.Errorf("Failed to encode data as JSON: %s", err)
+		return nil, err
+	}
+	if len(parts) > 0 {
+		readers = append(readers, bytes.NewBuffer(encoding))
+	}
 	return io.MultiReader(readers...), nil
 
 }

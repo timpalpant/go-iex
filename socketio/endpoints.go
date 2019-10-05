@@ -3,10 +3,10 @@ package socketio
 import "net/url"
 
 // HTTP endpoint.
-var httpEndpoint, _ = url.Parse("https://ws-api.iextrading.com/socketio/")
+var httpEndpoint, _ = url.Parse("https://ws-api.iextrading.com/socket.io/")
 
 // Wbsocket endpoint.
-var wsEndpoint, _ = url.Parse("wss://ws-api.iextrading.com/socketio/")
+var wsEndpoint, _ = url.Parse("wss://ws-api.iextrading.com/socket.io/")
 
 // An interface for hiding iexEndpoint.
 type Endpoint interface {

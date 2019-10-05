@@ -91,6 +91,30 @@ func TestHTTPEncodingErrors(t *testing.T) {
 
 func TestWebsocketEncoding(t *testing.T) {
 	Convey("Websocket encoding should", t, func() {
+		Convey("correctly encode a nil type", func() {
+			encoder := NewWSEncoder("/")
+			encoded, err := encoder.Encode(-1, -1, nil)
+			So(err, ShouldBeNil)
+			val, err := ioutil.ReadAll(encoded)
+			So(err, ShouldBeNil)
+			So(string(val), ShouldEqual, `/,`)
+		})
+		Convey("correctly encode an empty type", func() {
+			encoder := NewWSEncoder("/")
+			encoded, err := encoder.Encode(-1, -1, &testStruct{})
+			So(err, ShouldBeNil)
+			val, err := ioutil.ReadAll(encoded)
+			So(err, ShouldBeNil)
+			So(string(val), ShouldEqual, `/,`)
+		})
+		Convey("correctly send an upgrade request", func() {
+			encoder := NewWSEncoder("")
+			encoded, err := encoder.Encode(5, -1, nil)
+			So(err, ShouldBeNil)
+			val, err := ioutil.ReadAll(encoded)
+			So(err, ShouldBeNil)
+			So(string(val), ShouldEqual, `5`)
+		})
 		Convey("correctly encode a simple type", func() {
 			encoder := NewWSEncoder("")
 			encoded, err := encoder.Encode(-1, -1, &testStruct{
@@ -153,6 +177,22 @@ func TestWebsocketEncoding(t *testing.T) {
 
 func TestHTTPEncoding(t *testing.T) {
 	Convey("HTTP encoding should", t, func() {
+		Convey("correctly encode a nil type", func() {
+			encoder := NewHTTPEncoder("/")
+			encoded, err := encoder.Encode(-1, -1, nil)
+			So(err, ShouldBeNil)
+			val, err := ioutil.ReadAll(encoded)
+			So(err, ShouldBeNil)
+			So(string(val), ShouldEqual, `2:/,`)
+		})
+		Convey("correctly encode an empty type", func() {
+			encoder := NewHTTPEncoder("/")
+			encoded, err := encoder.Encode(4, 0, &testStruct{})
+			So(err, ShouldBeNil)
+			val, err := ioutil.ReadAll(encoded)
+			So(err, ShouldBeNil)
+			So(string(val), ShouldEqual, `4:40/,`)
+		})
 		Convey("correctly encode a simple type", func() {
 			encoder := NewHTTPEncoder("")
 			encoded, err := encoder.Encode(-1, -1, &testStruct{
