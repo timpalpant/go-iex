@@ -94,7 +94,8 @@ func (enc *strArrayEncoder) Encode(
 	// For each of the fields in v, turn the value into a string and append
 	// it to parts. If the field is of type Array, join the elements using
 	// commas and then add the resulting string to parts. Complex types
-	// larger than Array cannot be converted and will result in an error.
+	// other than Array or Slice cannot be converted and will result in an
+	// error.
 	for i := 0; i < instance.NumField(); i++ {
 		field := instance.Field(i)
 		// Skip unset fields.
