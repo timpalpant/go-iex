@@ -93,6 +93,35 @@ func maybeProcessFirstChar(
 	return true
 }
 
+// Given a string of data, this method will attempt to parse out a namespace
+// prefix. If it finds one and the passed in interface has a Namespace field,
+// this method will set the field to the parsed value. Returns the original
+// string if no namespace was found. Otherwise, the remaining string data is
+// returned.
+func maybeProcessNamespace(data string, v interface{}) string {
+	firstComma := strings.Index(data, ",")
+	firstOpenBracket := strings.Index(data, "[")
+	if data[0] == '/' && firstComma > -1 && firstComma < firstOpenBracket {
+		parts := strings.SplitN(data, ",", 2)
+		instance := reflect.ValueOf(v).Elem()
+		typeOfV := instance.Type()
+		for i := 0; i < instance.NumField(); i++ {
+			f := instance.Field(i)
+			if typeOfV.Field(i).Name == "Namespace" &&
+				f.Kind() == reflect.String {
+				if glog.V(3) {
+					glog.Infof(
+						"Setting Namespace to %d",
+						parts[0])
+				}
+				f.SetString(parts[0])
+				return parts[1]
+			}
+		}
+	}
+	return data
+}
+
 // An error type used when a potential JSON string is invalid.
 type NotJsonError struct {
 	data string
@@ -116,6 +145,7 @@ func parseToJSON(data string, v interface{}) error {
 	if len(minusTypes) == 0 {
 		return nil
 	}
+	minusTypes = maybeProcessNamespace(minusTypes, v)
 	if glog.V(5) {
 		glog.Infof("Checking JSON validity of %s", string(minusTypes))
 	}

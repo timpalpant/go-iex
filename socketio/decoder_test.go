@@ -20,6 +20,7 @@ type fakeDataWithTypes struct {
 	Bar         []int
 	MessageType int
 	PacketType  int
+	Namespace   string
 }
 
 func init() {
@@ -69,7 +70,8 @@ func TestSuccessfulDecoding(t *testing.T) {
 			err := HTTPToJSON(data, []interface{}{parsed})
 			So(err, ShouldBeNil)
 			So(parsed, ShouldResemble,
-				&fakeDataWithTypes{"baz", []int{4, 6}, 4, 4})
+				&fakeDataWithTypes{
+					"baz", []int{4, 6}, 4, 4, ""})
 		})
 		Convey("should populate message and packet type", func() {
 			data := strings.NewReader(
@@ -78,7 +80,8 @@ func TestSuccessfulDecoding(t *testing.T) {
 			err := HTTPToJSON(data, []interface{}{parsed})
 			So(err, ShouldBeNil)
 			So(parsed, ShouldResemble,
-				&fakeDataWithTypes{"baz", []int{4, 6}, 4, 4})
+				&fakeDataWithTypes{
+					"baz", []int{4, 6}, 4, 4, ""})
 		})
 		Convey("should populate only types", func() {
 			data := strings.NewReader(`44`)
@@ -86,7 +89,7 @@ func TestSuccessfulDecoding(t *testing.T) {
 			err := HTTPToJSON(data, []interface{}{parsed})
 			So(err, ShouldBeNil)
 			So(parsed, ShouldResemble,
-				&fakeDataWithTypes{"", []int(nil), 4, 4})
+				&fakeDataWithTypes{"", []int(nil), 4, 4, ""})
 		})
 		Convey("should handle length encoding", func() {
 			data := strings.NewReader(
@@ -95,7 +98,18 @@ func TestSuccessfulDecoding(t *testing.T) {
 			err := HTTPToJSON(data, []interface{}{parsed})
 			So(err, ShouldBeNil)
 			So(parsed, ShouldResemble,
-				&fakeDataWithTypes{"baz", []int{4, 6}, 4, 4})
+				&fakeDataWithTypes{
+					"baz", []int{4, 6}, 4, 4, ""})
+		})
+		Convey("should handle length and namespace encoding", func() {
+			data := strings.NewReader(
+				`37:42/1.0/tops,{"foo":"baz","bar":[4,6]}`)
+			parsed := &fakeDataWithTypes{}
+			err := HTTPToJSON(data, []interface{}{parsed})
+			So(err, ShouldBeNil)
+			So(parsed, ShouldResemble,
+				&fakeDataWithTypes{"baz", []int{4, 6},
+					4, 2, "/1.0/tops"})
 		})
 
 	})
@@ -113,7 +127,8 @@ func TestSuccessfulDecodingMultipleMessages(t *testing.T) {
 			So(parsedOne, ShouldResemble,
 				&fakeData{"baz", []int{4, 6}})
 			So(parsedTwo, ShouldResemble,
-				&fakeDataWithTypes{"baz", []int{4, 6}, 4, 4})
+				&fakeDataWithTypes{
+					"baz", []int{4, 6}, 4, 4, ""})
 		})
 
 	})
