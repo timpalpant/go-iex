@@ -136,9 +136,9 @@ func (n *NotJsonError) Error() string {
 // returns an error.
 func parseToJSON(data string, v interface{}) error {
 	minusTypes := data
-	if maybeProcessFirstChar("MessageType", minusTypes, v) {
+	if maybeProcessFirstChar("PacketType", minusTypes, v) {
 		minusTypes = minusTypes[1:]
-		if maybeProcessFirstChar("PacketType", minusTypes, v) {
+		if maybeProcessFirstChar("MessageType", minusTypes, v) {
 			minusTypes = minusTypes[1:]
 		}
 	}

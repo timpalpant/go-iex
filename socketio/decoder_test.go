@@ -109,7 +109,7 @@ func TestSuccessfulDecoding(t *testing.T) {
 			So(err, ShouldBeNil)
 			So(parsed, ShouldResemble,
 				&fakeDataWithTypes{"baz", []int{4, 6},
-					4, 2, "/1.0/tops"})
+					2, 4, "/1.0/tops"})
 		})
 
 	})
