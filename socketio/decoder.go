@@ -111,7 +111,7 @@ func maybeProcessNamespace(data string, v interface{}) string {
 				f.Kind() == reflect.String {
 				if glog.V(3) {
 					glog.Infof(
-						"Setting Namespace to %d",
+						"Setting Namespace to %s",
 						parts[0])
 				}
 				f.SetString(parts[0])

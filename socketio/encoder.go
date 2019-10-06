@@ -29,7 +29,7 @@ var disallowedTypes = map[reflect.Kind]struct{}{
 // added to the resulting JSON string array. If the MessageType or PacketType
 // are less than 0, they are not set on the output.
 type Encoder interface {
-	Encode(m MessageType, p PacketType, v interface{}) (io.Reader, error)
+	Encode(p PacketType, m MessageType, v interface{}) (io.Reader, error)
 }
 
 // Wraps a strArrayEncoder and returns its contents prepended by <length>:.
@@ -38,8 +38,8 @@ type httpEncoder struct {
 }
 
 func (enc *httpEncoder) Encode(
-	m MessageType, p PacketType, v interface{}) (io.Reader, error) {
-	inner, err := enc.content.Encode(m, p, v)
+	p PacketType, m MessageType, v interface{}) (io.Reader, error) {
+	inner, err := enc.content.Encode(p, m, v)
 	if err != nil {
 		return nil, err
 	}
@@ -72,15 +72,15 @@ func (e *encodeError) Error() string {
 }
 
 func (enc *strArrayEncoder) Encode(
-	m MessageType, p PacketType, v interface{}) (io.Reader, error) {
+	p PacketType, m MessageType, v interface{}) (io.Reader, error) {
 	readers := make([]io.Reader, 0)
-	if m >= 0 {
-		readers = append(readers,
-			strings.NewReader(fmt.Sprintf("%d", m)))
-	}
 	if p >= 0 {
 		readers = append(readers,
 			strings.NewReader(fmt.Sprintf("%d", p)))
+	}
+	if m >= 0 {
+		readers = append(readers,
+			strings.NewReader(fmt.Sprintf("%d", m)))
 	}
 	if len(enc.namespace) > 0 {
 		readers = append(readers,

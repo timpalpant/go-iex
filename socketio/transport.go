@@ -179,7 +179,7 @@ func joinDefaultNsp(endpoint Endpoint, client DoClient) error {
 func startHeartbeat(transport WSConn, ping int) chan int {
 	encoder := NewWSEncoder("")
 	send := func(packetType PacketType) {
-		reader, err := encoder.Encode(-1, packetType, nil)
+		reader, err := encoder.Encode(packetType, -1, nil)
 		if err != nil {
 			glog.Warningf(
 				"Could not encode probe message: %s", err)
