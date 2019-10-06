@@ -31,10 +31,12 @@ type invalidArrayComplex struct {
 }
 
 func init() {
-	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
-	var logLevel string
-	flag.StringVar(&logLevel, "logLevel", "5", "test")
-	flag.Lookup("v").Value.Set(logLevel)
+	if flag.Lookup("alsologtostderr").Value == nil {
+		flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+		var logLevel string
+		flag.StringVar(&logLevel, "logLevel", "5", "test")
+		flag.Lookup("v").Value.Set(logLevel)
+	}
 }
 
 func TestWebsocketEncodingErrors(t *testing.T) {

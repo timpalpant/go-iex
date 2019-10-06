@@ -101,10 +101,12 @@ func (f *fakeError) Error() string {
 }
 
 func init() {
-	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
-	var logLevel string
-	flag.StringVar(&logLevel, "logLevel", "5", "test")
-	flag.Lookup("v").Value.Set(logLevel)
+	if flag.Lookup("alsologtostderr").Value == nil {
+		flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+		var logLevel string
+		flag.StringVar(&logLevel, "logLevel", "5", "test")
+		flag.Lookup("v").Value.Set(logLevel)
+	}
 }
 
 var hsResponseString = `95:0{"sid":"N1pkgEHs-wEXi4DtAA4m","upgrades":["websocket"],"pingInterval":500,"pingTimeout":60000}`
@@ -113,7 +115,7 @@ var hsNoUpgradesString = `86:0{"sid":"N1pkgEHs-wEXi4DtAA4m","upgrades":[],"pingI
 var goodJoinResponse = `2:40`
 var badJoinResponse = `2:22`
 
-func TestWebsocketEncodingErrors(t *testing.T) {
+func TestTransport(t *testing.T) {
 	Convey("The Transport layer should", t, func() {
 		Convey("return an error on no response body", func() {
 			requests := make([]*http.Request, 0)
