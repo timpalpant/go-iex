@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
+	"github.com/timpalpant/go-iex"
 	. "github.com/timpalpant/go-iex/socketio"
 )
 
@@ -24,12 +25,10 @@ type fakeDataWithTypes struct {
 }
 
 func init() {
-	if flag.Lookup("alsologtostderr").Value == nil {
-		flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
-		var logLevel string
-		flag.StringVar(&logLevel, "logLevel", "5", "test")
-		flag.Lookup("v").Value.Set(logLevel)
-	}
+	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+	var logLevel string
+	flag.StringVar(&logLevel, "logLevel", "5", "test")
+	flag.Lookup("v").Value.Set(logLevel)
 }
 
 func TestUnsuccessfulDecoding(t *testing.T) {
@@ -129,6 +128,24 @@ func TestSuccessfulDecodingMultipleMessages(t *testing.T) {
 			So(parsedTwo, ShouldResemble,
 				&fakeDataWithTypes{
 					"baz", []int{4, 6}, 4, 4, ""})
+		})
+
+	})
+}
+func TestDecodeActualTops(t *testing.T) {
+	Convey("For an actual Tops response, HTTPToJSON", t, func() {
+		Convey("should populate a Tops message", func() {
+			data := strings.NewReader(`348:42/1.0/tops,["message","{\"symbol\":\"SNAP\",\"sector\":\"mediaentertainment\",\"securityType\":\"commonstock\",\"bidPrice\":0.0000,\"bidSize\":0,\"askPrice\":0.0000,\"askSize\":0,\"lastUpdated\":1569873716685,\"lastSalePrice\":15.8000,\"lastSaleSize\":100,\"lastSaleTime\":1569873590063,\"volume\":458065,\"marketPercent\":0.02262,\"seq\":26739}"]344:42/1.0/tops,["message","{\"symbol\":\"FB\",\"sector\":\"mediaentertainment\",\"securityType\":\"commonstock\",\"bidPrice\":0.0000,\"bidSize\":0,\"askPrice\":0.0000,\"askSize\":0,\"lastUpdated\":1569876755318,\"lastSalePrice\":178.0750,\"lastSaleSize\":1,\"lastSaleTime\":1569873595907,\"volume\":411341,\"marketPercent\":0.03700,\"seq\":5904}"]325:42/1.0/tops,["message","{\"symbol\":\"AIG+\",\"sector\":\"n/a\",\"securityType\":\"warrant\",\"bidPrice\":0.0000,\"bidSize\":0,\"askPrice\":0.0000,\"askSize\":0,\"lastUpdated\":1569873600001,\"lastSalePrice\":14.3700,\"lastSaleSize\":200,\"lastSaleTime\":1569859449771,\"volume\":211,\"marketPercent\":0.00632,\"seq\":7281}"]`)
+			parsedOne := &iex.TOPS{}
+			parsedTwo := &iex.TOPS{}
+			parsedThree := &iex.TOPS{}
+			err := HTTPToJSON(data,
+				[]interface{}{
+					parsedOne, parsedTwo, parsedThree})
+			So(err, ShouldBeNil)
+			So(parsedOne.Symbol, ShouldEqual, "SNAP")
+			So(parsedTwo.Symbol, ShouldEqual, "FB")
+			So(parsedThree.Symbol, ShouldEqual, "AIG+")
 		})
 
 	})

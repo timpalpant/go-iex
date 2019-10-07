@@ -11,20 +11,6 @@ import (
 	"github.com/golang/glog"
 )
 
-// SocketIO event types.
-type MessageType int
-
-// Most are unused. Defined in: https://preview.tinyurl.com/y3s4eh2y
-const (
-	Connect MessageType = iota
-	Disconnect
-	Event
-	Ack
-	Error
-	BinaryEvent
-	BinaryAck
-)
-
 // SocketIO packet types.
 type PacketType int
 
@@ -37,6 +23,20 @@ const (
 	Message
 	Upgrade
 	Noop
+)
+
+// SocketIO event types.
+type MessageType int
+
+// Most are unused. Defined in: https://preview.tinyurl.com/y3s4eh2y
+const (
+	Connect MessageType = iota
+	Disconnect
+	Event
+	Ack
+	Error
+	BinaryEvent
+	BinaryAck
 )
 
 // SocketIO data uses a format <length>:<data>. This function splits on the
@@ -103,6 +103,9 @@ func maybeProcessNamespace(data string, v interface{}) string {
 	firstOpenBracket := strings.Index(data, "[")
 	if data[0] == '/' && firstComma > -1 && firstComma < firstOpenBracket {
 		parts := strings.SplitN(data, ",", 2)
+		if glog.V(3) {
+			glog.Infof("Found namespace: %s", parts[0])
+		}
 		instance := reflect.ValueOf(v).Elem()
 		typeOfV := instance.Type()
 		for i := 0; i < instance.NumField(); i++ {
@@ -118,6 +121,7 @@ func maybeProcessNamespace(data string, v interface{}) string {
 				return parts[1]
 			}
 		}
+		return parts[1]
 	}
 	return data
 }
@@ -146,13 +150,46 @@ func parseToJSON(data string, v interface{}) error {
 		return nil
 	}
 	minusTypes = maybeProcessNamespace(minusTypes, v)
+	// The resulting is either a JSON object or a JSON array starting with
+	// the SocketIO event type string and ending with the JSON object. In
+	// order to handle both of these scenarios, Unmarshal first uses a
+	// discernType struct to determine the format before unmarshalling into
+	// v.
 	if glog.V(5) {
 		glog.Infof("Checking JSON validity of %s", string(minusTypes))
 	}
 	if !json.Valid([]byte(minusTypes)) {
 		return &NotJsonError{"invalid JSON"}
 	}
-	return json.Unmarshal([]byte(minusTypes), v)
+	// Sometimes, the JSON is an array containing a string event type
+	// followed by the JSON object. Othertimes, it is just the object. Use
+	// jsonArray to test for the first case.
+	var jsonArray []json.RawMessage
+	err := json.Unmarshal([]byte(minusTypes), &jsonArray)
+	if err != nil {
+		if glog.V(3) {
+			glog.Warningf(
+				"Could not parse response as JSON array: %s",
+				err)
+		}
+		return json.Unmarshal([]byte(minusTypes), v)
+	}
+	if glog.V(3) {
+		glog.Infof("Parsed as JSON array: %s", string(jsonArray[1]))
+	}
+	jsonPart := jsonArray[1]
+	err = json.Unmarshal(jsonPart, v)
+	if err != nil {
+		if glog.V(3) {
+			glog.Errorf("Could not unmarshal data: %s", err)
+		}
+		jsonPart, err := strconv.Unquote(string(jsonPart))
+		if err != nil {
+			glog.Error("Could not unescape JSON string")
+		}
+		return json.Unmarshal([]byte(jsonPart), v)
+	}
+	return nil
 }
 
 // Parses the JSON HTTP SocketIO response from the given Reader into the passed
