@@ -3,9 +3,12 @@ package socketio_test
 import (
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -46,8 +49,10 @@ type message struct {
 
 type fakeConn struct {
 	messagesToReturn []*message
-	messagesWritten  []*message
+	messagesWritten  [][]byte
+	messagesMutex    sync.Mutex
 	closed           bool
+	closedChan       chan bool
 	currentToReturn  int
 }
 
@@ -60,19 +65,19 @@ func (f *fakeConn) ReadMessage() (int, []byte, error) {
 		toReturn := f.messagesToReturn[f.currentToReturn]
 		return toReturn.messageType, toReturn.message, toReturn.err
 	}
-	return 0, []byte{}, nil
+	return 0, []byte{}, io.EOF
 }
 
 func (f *fakeConn) WriteMessage(messageType int, data []byte) error {
-	f.messagesWritten = append(f.messagesWritten, &message{
-		messageType: messageType,
-		message:     data,
-	})
+	f.messagesMutex.Lock()
+	defer f.messagesMutex.Unlock()
+	f.messagesWritten = append(f.messagesWritten, data)
 	return nil
 }
 
 func (f *fakeConn) Close() error {
 	f.closed = true
+	f.closedChan <- true
 	return nil
 }
 
@@ -101,15 +106,14 @@ func (f *fakeError) Error() string {
 }
 
 func init() {
-	if flag.Lookup("alsologtostderr").Value == nil {
-		flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
-		var logLevel string
-		flag.StringVar(&logLevel, "logLevel", "5", "test")
-		flag.Lookup("v").Value.Set(logLevel)
-	}
+	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+	var logLevel string
+	flag.StringVar(&logLevel, "logLevel", "5", "test")
+	flag.Lookup("v").Value.Set(logLevel)
 }
 
 var hsResponseString = `95:0{"sid":"N1pkgEHs-wEXi4DtAA4m","upgrades":["websocket"],"pingInterval":500,"pingTimeout":60000}`
+var hsLongPingResponseString = `98:0{"sid":"N1pkgEHs-wEXi4DtAA4m","upgrades":["websocket"],"pingInterval":100000,"pingTimeout":60000}`
 var hsNoUpgradesString = `86:0{"sid":"N1pkgEHs-wEXi4DtAA4m","upgrades":[],"pingInterval":25000,"pingTimeout":60000}`
 
 var goodJoinResponse = `2:40`
@@ -219,11 +223,13 @@ func TestTransport(t *testing.T) {
 				resp: nspResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fc := &fakeConn{}
+			fc := &fakeConn{
+				closedChan: make(chan bool),
+			}
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
-			t, err := NewTransport(fdc, fw)
+			trans, err := NewTransport(fdc, fw)
 			So(err, ShouldBeNil)
 			So(len(fdc.Requests), ShouldEqual, 2)
 			to := fdc.Requests[1].URL
@@ -236,19 +242,133 @@ func TestTransport(t *testing.T) {
 			// This should allow at least 2 heartbeats at 500ms.
 			dur, _ := time.ParseDuration("1.2s")
 			time.Sleep(dur)
+			fc.messagesMutex.Lock()
 			So(len(fc.messagesWritten), ShouldEqual, 3)
 			msgs := fc.messagesWritten
-			So(string(msgs[0].message), ShouldEqual, "5")
-			So(string(msgs[1].message), ShouldEqual, "2")
-			So(string(msgs[2].message), ShouldEqual, "2")
+			So(string(msgs[0]), ShouldEqual, "5")
+			So(string(msgs[1]), ShouldEqual, "2")
+			So(string(msgs[2]), ShouldEqual, "2")
+			fc.messagesMutex.Unlock()
 
-			t.Close()
-			dur, _ = time.ParseDuration(".5s")
-			time.Sleep(dur)
+			trans.Close()
+
+			<-fc.closedChan
+
+			fc.messagesMutex.Lock()
 			msgs = fc.messagesWritten
 			So(len(fc.messagesWritten), ShouldEqual, 4)
-			So(string(msgs[3].message), ShouldEqual, "1")
+			So(string(msgs[3]), ShouldEqual, "1")
 			So(fc.closed, ShouldEqual, true)
+			fc.messagesMutex.Unlock()
+		})
+		Convey("prevent writing to a closed transport", func() {
+			requests := make([]*http.Request, 0)
+			hsResponse := &http.Response{
+				Body: ioutil.NopCloser(
+					strings.NewReader(hsResponseString)),
+			}
+			nspResponse := &http.Response{
+				Body: ioutil.NopCloser(
+					strings.NewReader(goodJoinResponse)),
+			}
+			responses := []*response{&response{
+				resp: hsResponse,
+			}, &response{
+				resp: nspResponse,
+			}}
+			fdc := &fakeDoClient{requests, responses, 0}
+			fc := &fakeConn{}
+			fw := &fakeWsDialer{
+				conn: fc,
+			}
+			trans, err := NewTransport(fdc, fw)
+			trans.Close()
+			_, err = trans.Write([]byte("String"))
+			So(err, ShouldNotBeNil)
+			So(err.Error(), ShouldContainSubstring,
+				"Cannot write to a closed transport")
+		})
+		Convey("prevent reading from a closed transport", func() {
+			requests := make([]*http.Request, 0)
+			hsResponse := &http.Response{
+				Body: ioutil.NopCloser(
+					strings.NewReader(hsResponseString)),
+			}
+			nspResponse := &http.Response{
+				Body: ioutil.NopCloser(
+					strings.NewReader(goodJoinResponse)),
+			}
+			responses := []*response{&response{
+				resp: hsResponse,
+			}, &response{
+				resp: nspResponse,
+			}}
+			fdc := &fakeDoClient{requests, responses, 0}
+			fc := &fakeConn{}
+			fw := &fakeWsDialer{
+				conn: fc,
+			}
+			trans, err := NewTransport(fdc, fw)
+			trans.Close()
+			_, err = trans.GetReadChannel()
+			So(err, ShouldNotBeNil)
+			So(err.Error(), ShouldContainSubstring,
+				"Cannot read from a closed transport")
+		})
+		Convey("successfully write from multiple threads", func() {
+			requests := make([]*http.Request, 0)
+			// For the sake of this test, make the heartbeat long to
+			// prevent from interferring.
+			hsResponse := &http.Response{
+				Body: ioutil.NopCloser(
+					strings.NewReader(
+						hsLongPingResponseString)),
+			}
+			nspResponse := &http.Response{
+				Body: ioutil.NopCloser(
+					strings.NewReader(goodJoinResponse)),
+			}
+			responses := []*response{&response{
+				resp: hsResponse,
+			}, &response{
+				resp: nspResponse,
+			}}
+			fdc := &fakeDoClient{requests, responses, 0}
+			fc := &fakeConn{
+				closedChan: make(chan bool),
+			}
+			fw := &fakeWsDialer{
+				conn: fc,
+			}
+			trans, err := NewTransport(fdc, fw)
+			So(err, ShouldBeNil)
+			var wg sync.WaitGroup
+			for i := 10; i < 20; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					trans.Write([]byte(strconv.Itoa(i)))
+				}(i)
+			}
+			for i := 20; i < 30; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					trans.Write([]byte(strconv.Itoa(i)))
+
+				}(i)
+			}
+			wg.Wait()
+			trans.Close()
+			<-fc.closedChan
+
+			fc.messagesMutex.Lock()
+			So(fc.messagesWritten, ShouldHaveLength, 22)
+			for i := 10; i < 30; i++ {
+				So(fc.messagesWritten, ShouldContain,
+					[]byte(strconv.Itoa(i)))
+			}
+			fc.messagesMutex.Unlock()
 		})
 	})
 }

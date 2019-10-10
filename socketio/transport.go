@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/chilts/sid"
@@ -27,12 +28,12 @@ type namespaceResponse struct {
 }
 
 // Fulfilled by http.Client#Do.
-type DoClient interface {
+type doClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// An internal interface that is fulfilled by websocket.Conn and allows
-// for injecting a test connection.
+// An interface that is fulfilled by websocket.Conn and allows for injecting a
+// test connection.
 type WSConn interface {
 	ReadMessage() (int, []byte, error)
 	WriteMessage(messageType int, data []byte) error
@@ -50,48 +51,139 @@ const (
 	stopBeating = iota
 )
 
-// Negotiates a SocketIO connection with IEX and returns a WSConn for
-// communicating with IEX.
-type Transport interface {
-	ReadMessage() (int, []byte, error)
-	WriteMessage(data io.Reader) error
-	Close() error
-}
-
-type transport struct {
-	conn          WSConn
-	quitHeartbeat chan int
-}
-
-func (t *transport) ReadMessage() (int, []byte, error) {
-	return t.conn.ReadMessage()
-}
-
-func (t *transport) WriteMessage(data io.Reader) error {
-	toWrite, err := ioutil.ReadAll(data)
-	if err != nil {
-		return err
-	}
-	return t.conn.WriteMessage(websocket.TextMessage, toWrite)
-}
-
-func (t *transport) Close() error {
-	t.quitHeartbeat <- stopBeating
-	return t.conn.Close()
-}
-
 // Indicates an error during initialization of the Transport layer.
-type transportConnectError struct {
+type transportError struct {
 	message string
 }
 
-func (t *transportConnectError) Error() string {
+func (t *transportError) Error() string {
 	return t.message
+}
+
+// A wrapper that provides thread-safe methods for interacting with the
+// underlying Websocket layer.
+type Transport interface {
+	// Provides a thread-safe io.Writer Write method.
+	io.Writer
+
+	// Returns a pointer to a read channel. A new channel is returned with
+	// each call, and all channels will receive a copy of all incoming
+	// messages.
+	GetReadChannel() (<-chan []byte, error)
+
+	// Closes the underlying Websocket connection.
+	Close()
+}
+
+type transport struct {
+	// The wrapped Gorilla websocket.Conn.
+	conn WSConn
+	// A channel used to kill an ongoing heartbeat.
+	quitHeartbeat chan<- int
+	// A collection of outgoing channels returned by GetReadChannel.
+	outgoing []chan []byte
+	// Used to buffer incoming message for writing.
+	incoming chan []byte
+	// True when this transport has been closed.
+	closed bool
+	// Used to syncrhonize whether the incoming chaneel has been closed.
+	closedM sync.RWMutex
+	// Used to synchronize closing of the channels.
+	once sync.Once
+}
+
+func (t *transport) Write(p []byte) (int, error) {
+	t.closedM.RLock()
+	defer t.closedM.RUnlock()
+	if t.closed {
+		return 0, &transportError{"Cannot write to a closed transport"}
+	}
+	t.incoming <- p
+	return len(p), nil
+}
+
+func (t *transport) GetReadChannel() (<-chan []byte, error) {
+	t.closedM.RLock()
+	defer t.closedM.RUnlock()
+	if t.closed {
+		return nil, &transportError{
+			"Cannot read from a closed transport"}
+	}
+	t.outgoing = append(t.outgoing, make(chan []byte, 10))
+	return t.outgoing[len(t.outgoing)-1], nil
+}
+
+func (t *transport) Close() {
+	t.once.Do(func() {
+		// Send the close signal before marking the transport as closed.
+		sendPacket(t, Close)
+
+		t.quitHeartbeat <- stopBeating
+		for _, ch := range t.outgoing {
+			close(ch)
+		}
+		close(t.incoming)
+
+		t.closedM.Lock()
+		t.closed = true
+		t.closedM.Unlock()
+	})
+}
+
+func (t *transport) startReadAndWriteRoutines() {
+	go func(ch <-chan []byte) {
+		for message := range ch {
+			if glog.V(3) {
+				glog.Infof("Writing message: %s", message)
+			}
+			err := t.conn.WriteMessage(
+				websocket.TextMessage, message)
+			if err != nil {
+				glog.Errorf(
+					"Failed to write message %q: %s",
+					message, err)
+			}
+		}
+		t.conn.Close()
+	}(t.incoming)
+	go func(outgoing []chan []byte) {
+		for {
+			_, message, err := t.conn.ReadMessage()
+			if err != nil {
+				glog.Errorf(
+					"Error reading from websocket: %s",
+					err)
+				return
+			}
+			if len(message) == 0 {
+				continue
+			}
+			if glog.V(3) {
+				glog.Infof(
+					"Received websocket message: %s",
+					message)
+			}
+			t.closedM.RLock()
+			if t.closed {
+				if glog.V(3) {
+					errTxt := "Dropping message %s;" +
+						"Transport closed"
+					glog.Warningf(errTxt, message)
+				}
+				t.closedM.RUnlock()
+				break
+			}
+			t.closedM.RUnlock()
+			for _, ch := range outgoing {
+				ch <- message
+			}
+		}
+	}(t.outgoing)
 }
 
 // Performs an HTTP request and returns the response body. If there is an error
 // the io.ReaderCloser will be nil.
-func makeHTTPRequest(client DoClient, method string,
+func makeHTTPRequest(client doClient, method string,
 	to string, body io.Reader) (io.ReadCloser, error) {
 	glog.Infof("Making %s request to: %v", method, to)
 	req, err := http.NewRequest(method, to, body)
@@ -111,7 +203,7 @@ func makeHTTPRequest(client DoClient, method string,
 		return nil, err
 	}
 	if resp == nil {
-		return nil, &transportConnectError{fmt.Sprintf(
+		return nil, &transportError{fmt.Sprintf(
 			"No response body from %s", to)}
 	}
 	return resp.Body, nil
@@ -119,7 +211,7 @@ func makeHTTPRequest(client DoClient, method string,
 
 // Performs the initial GET connection to the SocketIO endpoint. If it it
 // successful, it will set the session id (sid) parameter on the endpoint.
-func connect(endpoint Endpoint, client DoClient) (*handshakeResponse, error) {
+func connect(endpoint Endpoint, client doClient) (*handshakeResponse, error) {
 	handshakeUrl := endpoint.GetHTTPUrl()
 	resp, err := makeHTTPRequest(client, "GET", handshakeUrl, nil)
 	if err != nil {
@@ -140,7 +232,7 @@ func connect(endpoint Endpoint, client DoClient) (*handshakeResponse, error) {
 
 	}
 	if !canUpgradeToWs {
-		return nil, &transportConnectError{
+		return nil, &transportError{
 			"Websocket upgrade not found"}
 	}
 	endpoint.SetSid(handshake.Sid)
@@ -149,7 +241,7 @@ func connect(endpoint Endpoint, client DoClient) (*handshakeResponse, error) {
 
 // Joins the default namespace. Returns an error if there was an unexpected
 // server response.
-func joinDefaultNsp(endpoint Endpoint, client DoClient) error {
+func joinDefaultNsp(endpoint Endpoint, client doClient) error {
 	encoder := NewHTTPEncoder("/")
 	reader, err := encoder.Encode(4, 0, nil)
 	if err != nil {
@@ -168,35 +260,42 @@ func joinDefaultNsp(endpoint Endpoint, client DoClient) error {
 		glog.Errorf("Error parsing namespace response: %s", err)
 		return err
 	}
-	if nsp.MessageType != 4 || nsp.PacketType != 0 {
+	if nsp.PacketType != 4 || nsp.MessageType != 0 {
 		glog.Errorf("Unexpected namespace response: %+v", nsp)
-		return &transportConnectError{fmt.Sprintf(
+		return &transportError{fmt.Sprintf(
 			"Unexpected namespace response: %+v", nsp)}
 	}
 	return nil
 }
 
-func startHeartbeat(transport WSConn, ping int) chan int {
+func sendPacket(transport Transport, packetType PacketType) {
 	encoder := NewWSEncoder("")
-	send := func(packetType PacketType) {
-		reader, err := encoder.Encode(packetType, -1, nil)
-		if err != nil {
-			glog.Warningf(
-				"Could not encode probe message: %s", err)
-		}
-		data, err := ioutil.ReadAll(reader)
-		if err != nil {
-			glog.Warningf(
-				"Could not read encoded message: %s", err)
-		}
-		err = transport.WriteMessage(websocket.TextMessage, data)
-		if err != nil {
-			glog.Warningf(
-				"Error writing probe message: %s", err)
-		}
+	reader, err := encoder.Encode(packetType, -1, nil)
+	if err != nil {
+		glog.Warningf(
+			"Could not encode probe message: %s", err)
 	}
-	quit := make(chan int)
-	duration, err := time.ParseDuration(strconv.Itoa(ping) + "ms")
+	data, err := ioutil.ReadAll(reader)
+	if err != nil {
+		glog.Warningf(
+			"Could not read encoded message: %s", err)
+	}
+	_, err = transport.Write(data)
+	if err != nil {
+		glog.Warningf(
+			"Error writing probe message: %s", err)
+		return
+	}
+	if glog.V(3) {
+		glog.Infof("Sent packet %q", data)
+	}
+}
+
+// Starts a go routine that sends a ping message on the given Transport every
+// "ping" milliseconds.
+func startHeartbeat(
+	transport Transport, quitChan <-chan int, pingMillis int) {
+	duration, err := time.ParseDuration(strconv.Itoa(pingMillis) + "ms")
 	if err != nil {
 		glog.Fatalf("Could not start heartbeat: %s", err)
 	}
@@ -204,18 +303,16 @@ func startHeartbeat(transport WSConn, ping int) chan int {
 	go func() {
 		for {
 			select {
-			case <-quit:
-				send(Close)
+			case <-quitChan:
 				heartbeat.Stop()
 			case t := <-heartbeat.C:
 				if glog.V(3) {
 					glog.Infof("Heartbeating at %v", t)
 				}
-				send(Ping)
+				sendPacket(transport, Ping)
 			}
 		}
 	}()
-	return quit
 }
 
 // Upgrades from an HTTPS to a Websocket connection. This method starts
@@ -241,20 +338,31 @@ func upgrade(endpoint Endpoint, dialer WSDialer, ping int) (Transport, error) {
 		glog.Errorf("Error upgrading connection: %s", err)
 		return nil, err
 	}
-	quit := startHeartbeat(conn, ping)
-	trans := &transport{conn, quit}
-	err = trans.WriteMessage(reader)
+	quitChannel := make(chan int)
+	trans := &transport{
+		conn:          conn,
+		quitHeartbeat: quitChannel,
+		outgoing:      make([]chan []byte, 0),
+		incoming:      make(chan []byte, 10),
+	}
+	data, err := ioutil.ReadAll(reader)
+	if err != nil {
+		glog.Errorf("Error reading upgrade: %s", err)
+	}
+	_, err = trans.Write(data)
 	if err != nil {
 		glog.Errorf("Error upgrading connection: %s", err)
 		return nil, err
 	}
+	startHeartbeat(trans, quitChannel, ping)
+	trans.startReadAndWriteRoutines()
 
 	return trans, nil
 }
 
 // Returns a new Transport object backed by an open Websocket connection
 // or an error if one occurs.
-func NewTransport(client DoClient, dialer WSDialer) (Transport, error) {
+func NewTransport(client doClient, dialer WSDialer) (Transport, error) {
 	endpoint := NewIEXEndpoint(sid.IdBase64)
 	handshake, err := connect(endpoint, client)
 	if err != nil {
