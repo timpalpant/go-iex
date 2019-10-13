@@ -48,29 +48,38 @@ type message struct {
 }
 
 type fakeConn struct {
-	messagesToReturn []*message
-	messagesWritten  [][]byte
-	messagesMutex    sync.Mutex
-	closed           bool
-	closedChan       chan bool
-	currentToReturn  int
+	sync.Mutex
+	readChan        chan []byte
+	messagesWritten [][]byte
+	closed          bool
+	closedChan      chan bool
+}
+
+func emptyConn() *fakeConn {
+	return &fakeConn{
+		readChan:   make(chan []byte),
+		closedChan: make(chan bool),
+	}
+}
+
+func conn(readChan chan []byte) *fakeConn {
+	return &fakeConn{
+		readChan:   readChan,
+		closedChan: make(chan bool),
+	}
 }
 
 func (f *fakeConn) ReadMessage() (int, []byte, error) {
-	numMessages := len(f.messagesToReturn)
-	if numMessages > 0 && f.currentToReturn < numMessages {
-		defer func() {
-			f.currentToReturn++
-		}()
-		toReturn := f.messagesToReturn[f.currentToReturn]
-		return toReturn.messageType, toReturn.message, toReturn.err
+	v, ok := <-f.readChan
+	if ok {
+		return len(v), v, nil
 	}
-	return 0, []byte{}, io.EOF
+	return 0, nil, io.EOF
 }
 
 func (f *fakeConn) WriteMessage(messageType int, data []byte) error {
-	f.messagesMutex.Lock()
-	defer f.messagesMutex.Unlock()
+	f.Lock()
+	defer f.Unlock()
 	f.messagesWritten = append(f.messagesWritten, data)
 	return nil
 }
@@ -223,9 +232,7 @@ func TestTransport(t *testing.T) {
 				resp: nspResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fc := &fakeConn{
-				closedChan: make(chan bool),
-			}
+			fc := emptyConn()
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
@@ -242,24 +249,24 @@ func TestTransport(t *testing.T) {
 			// This should allow at least 2 heartbeats at 500ms.
 			dur, _ := time.ParseDuration("1.2s")
 			time.Sleep(dur)
-			fc.messagesMutex.Lock()
+			fc.Lock()
 			So(len(fc.messagesWritten), ShouldEqual, 3)
 			msgs := fc.messagesWritten
 			So(string(msgs[0]), ShouldEqual, "5")
 			So(string(msgs[1]), ShouldEqual, "2")
 			So(string(msgs[2]), ShouldEqual, "2")
-			fc.messagesMutex.Unlock()
+			fc.Unlock()
 
 			trans.Close()
 
 			<-fc.closedChan
 
-			fc.messagesMutex.Lock()
+			fc.Lock()
 			msgs = fc.messagesWritten
 			So(len(fc.messagesWritten), ShouldEqual, 4)
 			So(string(msgs[3]), ShouldEqual, "1")
 			So(fc.closed, ShouldEqual, true)
-			fc.messagesMutex.Unlock()
+			fc.Unlock()
 		})
 		Convey("prevent writing to a closed transport", func() {
 			requests := make([]*http.Request, 0)
@@ -277,7 +284,7 @@ func TestTransport(t *testing.T) {
 				resp: nspResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fc := &fakeConn{}
+			fc := emptyConn()
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
@@ -304,7 +311,7 @@ func TestTransport(t *testing.T) {
 				resp: nspResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fc := &fakeConn{}
+			fc := emptyConn()
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
@@ -334,9 +341,7 @@ func TestTransport(t *testing.T) {
 				resp: nspResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fc := &fakeConn{
-				closedChan: make(chan bool),
-			}
+			fc := emptyConn()
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
@@ -362,13 +367,48 @@ func TestTransport(t *testing.T) {
 			trans.Close()
 			<-fc.closedChan
 
-			fc.messagesMutex.Lock()
+			fc.Lock()
 			So(fc.messagesWritten, ShouldHaveLength, 22)
 			for i := 10; i < 30; i++ {
 				So(fc.messagesWritten, ShouldContain,
 					[]byte(strconv.Itoa(i)))
 			}
-			fc.messagesMutex.Unlock()
+			fc.Unlock()
+		})
+		Convey("successfully read from multiple threads", func() {
+			requests := make([]*http.Request, 0)
+			hsResponse := &http.Response{
+				Body: ioutil.NopCloser(
+					strings.NewReader(hsResponseString)),
+			}
+			nspResponse := &http.Response{
+				Body: ioutil.NopCloser(
+					strings.NewReader(goodJoinResponse)),
+			}
+			responses := []*response{&response{
+				resp: hsResponse,
+			}, &response{
+				resp: nspResponse,
+			}}
+			fdc := &fakeDoClient{requests, responses, 0}
+			readChan := make(chan []byte, 10)
+			fc := conn(readChan)
+			fw := &fakeWsDialer{
+				conn: fc,
+			}
+			trans, err := NewTransport(fdc, fw)
+			So(err, ShouldBeNil)
+			rc1, err := trans.GetReadChannel()
+			So(err, ShouldBeNil)
+			rc2, err := trans.GetReadChannel()
+			So(err, ShouldBeNil)
+			rc3, err := trans.GetReadChannel()
+			So(err, ShouldBeNil)
+			message := []byte("Hello World")
+			fc.readChan <- message
+			So(<-rc1, ShouldResemble, message)
+			So(<-rc2, ShouldResemble, message)
+			So(<-rc3, ShouldResemble, message)
 		})
 	})
 }

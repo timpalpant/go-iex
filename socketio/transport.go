@@ -75,26 +75,31 @@ type Transport interface {
 	Close()
 }
 
+// A set of channels used to convey incoming messages to listeners.
+type outgoing struct {
+	sync.RWMutex
+	// A collection of channels for transmitting messages to consumers.
+	channels []chan []byte
+}
+
 type transport struct {
+	sync.RWMutex
+	sync.Once
 	// The wrapped Gorilla websocket.Conn.
 	conn WSConn
 	// A channel used to kill an ongoing heartbeat.
 	quitHeartbeat chan<- int
 	// A collection of outgoing channels returned by GetReadChannel.
-	outgoing []chan []byte
+	outgoing *outgoing
 	// Used to buffer incoming message for writing.
 	incoming chan []byte
 	// True when this transport has been closed.
 	closed bool
-	// Used to syncrhonize whether the incoming chaneel has been closed.
-	closedM sync.RWMutex
-	// Used to synchronize closing of the channels.
-	once sync.Once
 }
 
 func (t *transport) Write(p []byte) (int, error) {
-	t.closedM.RLock()
-	defer t.closedM.RUnlock()
+	t.RLock()
+	defer t.RUnlock()
 	if t.closed {
 		return 0, &transportError{"Cannot write to a closed transport"}
 	}
@@ -103,30 +108,31 @@ func (t *transport) Write(p []byte) (int, error) {
 }
 
 func (t *transport) GetReadChannel() (<-chan []byte, error) {
-	t.closedM.RLock()
-	defer t.closedM.RUnlock()
+	t.outgoing.RLock()
+	defer t.outgoing.RUnlock()
 	if t.closed {
 		return nil, &transportError{
 			"Cannot read from a closed transport"}
 	}
-	t.outgoing = append(t.outgoing, make(chan []byte, 10))
-	return t.outgoing[len(t.outgoing)-1], nil
+	t.outgoing.channels = append(
+		t.outgoing.channels, make(chan []byte, 5))
+	return t.outgoing.channels[len(t.outgoing.channels)-1], nil
 }
 
 func (t *transport) Close() {
-	t.once.Do(func() {
+	t.Do(func() {
 		// Send the close signal before marking the transport as closed.
 		sendPacket(t, Close)
 
 		t.quitHeartbeat <- stopBeating
-		for _, ch := range t.outgoing {
+		for _, ch := range t.outgoing.channels {
 			close(ch)
 		}
 		close(t.incoming)
 
-		t.closedM.Lock()
+		t.Lock()
 		t.closed = true
-		t.closedM.Unlock()
+		t.Unlock()
 	})
 }
 
@@ -146,7 +152,7 @@ func (t *transport) startReadAndWriteRoutines() {
 		}
 		t.conn.Close()
 	}(t.incoming)
-	go func(outgoing []chan []byte) {
+	go func() {
 		for {
 			_, message, err := t.conn.ReadMessage()
 			if err != nil {
@@ -163,22 +169,22 @@ func (t *transport) startReadAndWriteRoutines() {
 					"Received websocket message: %s",
 					message)
 			}
-			t.closedM.RLock()
+			t.RLock()
 			if t.closed {
 				if glog.V(3) {
 					errTxt := "Dropping message %s;" +
 						"Transport closed"
 					glog.Warningf(errTxt, message)
 				}
-				t.closedM.RUnlock()
+				t.RUnlock()
 				break
 			}
-			t.closedM.RUnlock()
-			for _, ch := range outgoing {
+			t.RUnlock()
+			for _, ch := range t.outgoing.channels {
 				ch <- message
 			}
 		}
-	}(t.outgoing)
+	}()
 }
 
 // Performs an HTTP request and returns the response body. If there is an error
@@ -342,7 +348,7 @@ func upgrade(endpoint Endpoint, dialer WSDialer, ping int) (Transport, error) {
 	trans := &transport{
 		conn:          conn,
 		quitHeartbeat: quitChannel,
-		outgoing:      make([]chan []byte, 0),
+		outgoing:      &outgoing{channels: make([]chan []byte, 0)},
 		incoming:      make(chan []byte, 10),
 	}
 	data, err := ioutil.ReadAll(reader)
