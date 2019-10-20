@@ -135,10 +135,12 @@ func (n *NotJsonError) Error() string {
 	return n.data
 }
 
-// HTTP response data is message type, followed by an optional packet type
-// followed by JSON data. This function populates the passed in struct or
-// returns an error.
-func parseToJSON(data string, v interface{}) error {
+// Parses the PacketType, MessageType and Namespace out of the passed in data
+// string and into the fields of the same name on the passed in type v. The
+// remaining string data is returned. If the metadata cannot be found or the
+// passed in type v does not have PacketType, MessageType or Namespace fields,
+// then no changes are made and the original data is returned.
+func ParseMetadata(data string, v interface{}) string {
 	minusTypes := data
 	if maybeProcessFirstChar("PacketType", minusTypes, v) {
 		minusTypes = minusTypes[1:]
@@ -147,32 +149,40 @@ func parseToJSON(data string, v interface{}) error {
 		}
 	}
 	if len(minusTypes) == 0 {
-		return nil
+		return ""
 	}
-	minusTypes = maybeProcessNamespace(minusTypes, v)
+	return maybeProcessNamespace(minusTypes, v)
+}
+
+// Parses the actual JSON message into the passed in message type. The SocketIO
+// response seems to alternate between a JSON array and a JSON object. In the
+// case of the former, this method attempts to parse the second element of the
+// array into v. If an error occurs, it is returned and v may not contain all
+// parsed data.
+func ParseToJSON(data string, v interface{}) error {
 	// The resulting is either a JSON object or a JSON array starting with
 	// the SocketIO event type string and ending with the JSON object. In
-	// order to handle both of these scenarios, Unmarshal first uses a
-	// discernType struct to determine the format before unmarshalling into
-	// v.
+	// order to handle both of these scenarios, Unmarshal first tries to
+	// parse a JSON array with the first element being an instance of v. If
+	// that fails, it tries to parse all the data into v.
 	if glog.V(5) {
-		glog.Infof("Checking JSON validity of %s", string(minusTypes))
+		glog.Infof("Checking JSON validity of %s", string(data))
 	}
-	if !json.Valid([]byte(minusTypes)) {
+	if !json.Valid([]byte(data)) {
 		return &NotJsonError{"invalid JSON"}
 	}
 	// Sometimes, the JSON is an array containing a string event type
 	// followed by the JSON object. Othertimes, it is just the object. Use
 	// jsonArray to test for the first case.
 	var jsonArray []json.RawMessage
-	err := json.Unmarshal([]byte(minusTypes), &jsonArray)
+	err := json.Unmarshal([]byte(data), &jsonArray)
 	if err != nil {
 		if glog.V(3) {
 			glog.Warningf(
 				"Could not parse response as JSON array: %s",
 				err)
 		}
-		return json.Unmarshal([]byte(minusTypes), v)
+		return json.Unmarshal([]byte(data), v)
 	}
 	if glog.V(3) {
 		glog.Infof("Parsed as JSON array: %s", string(jsonArray[1]))
@@ -211,11 +221,15 @@ func HTTPToJSON(data io.Reader, v []interface{}) error {
 			glog.Infof("Subresponse: %s", data)
 			glog.Infof("Leftover: %s", leftover)
 		}
-		err := parseToJSON(data, v[fillingIn])
-		if err != nil {
-			glog.Warningf(
-				"Unable to parse message: %s; %s", data, err)
-			return err
+		remaining := ParseMetadata(data, v[fillingIn])
+		if len(remaining) > 0 {
+			err := ParseToJSON(remaining, v[fillingIn])
+			if err != nil {
+				glog.Warningf(
+					"Unable to parse message: %s; %s",
+					data, err)
+				return err
+			}
 		}
 		if len(leftover) == 0 {
 			break
