@@ -1,8 +1,6 @@
 package socketio_test
 
 import (
-	"flag"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -112,13 +110,6 @@ type fakeError struct {
 
 func (f *fakeError) Error() string {
 	return f.message
-}
-
-func init() {
-	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
-	var logLevel string
-	flag.StringVar(&logLevel, "logLevel", "5", "test")
-	flag.Lookup("v").Value.Set(logLevel)
 }
 
 var hsResponseString = `95:0{"sid":"N1pkgEHs-wEXi4DtAA4m","upgrades":["websocket"],"pingInterval":500,"pingTimeout":60000}`

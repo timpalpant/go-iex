@@ -39,6 +39,16 @@ const (
 	BinaryAck
 )
 
+// The general SocketIO packet metadata.
+type packetMetadata struct {
+	PacketType  PacketType
+	MessageType MessageType
+	Namespace   string
+	// The JSON string data remaining after the metadata has been parsed
+	// out.
+	Data string
+}
+
 // SocketIO data uses a format <length>:<data>. This function splits on the
 // first occurrence of ":", attempts to parse <length> as an int, and returns
 // <data>. If there is a problem, the original string is returned. The method

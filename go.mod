@@ -1,6 +1,7 @@
 module github.com/timpalpant/go-iex
 
 require (
+	github.com/cheekybits/genny v1.0.0
 	github.com/chilts/sid v0.0.0-20190607042430-660e94789ec9
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/google/go-cmp v0.2.0 // indirect

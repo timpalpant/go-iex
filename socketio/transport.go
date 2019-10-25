@@ -21,12 +21,6 @@ type handshakeResponse struct {
 	Upgrades     []string
 }
 
-type namespaceResponse struct {
-	MessageType MessageType
-	PacketType  PacketType
-	Nsp         string
-}
-
 // Fulfilled by http.Client#Do.
 type doClient interface {
 	Do(req *http.Request) (*http.Response, error)
@@ -115,7 +109,7 @@ func (t *transport) GetReadChannel() (<-chan []byte, error) {
 			"Cannot read from a closed transport"}
 	}
 	t.outgoing.channels = append(
-		t.outgoing.channels, make(chan []byte, 5))
+		t.outgoing.channels, make(chan []byte, 1))
 	return t.outgoing.channels[len(t.outgoing.channels)-1], nil
 }
 
@@ -249,7 +243,7 @@ func connect(endpoint Endpoint, client doClient) (*handshakeResponse, error) {
 // server response.
 func joinDefaultNsp(endpoint Endpoint, client doClient) error {
 	encoder := NewHTTPEncoder("/")
-	reader, err := encoder.Encode(4, 0, nil)
+	reader, err := encoder.EncodePacket(4, 0)
 	if err != nil {
 		glog.Errorf("Error encoding namespace connection: %s", err)
 		return err
@@ -260,23 +254,25 @@ func joinDefaultNsp(endpoint Endpoint, client doClient) error {
 		glog.Errorf("Error connecting to the empty room: %s", err)
 		return err
 	}
-	var nsp namespaceResponse
-	err = HTTPToJSON(resp, []interface{}{&nsp})
+	var packetMetadata packetMetadata
+	err = HTTPToJSON(resp, []interface{}{&packetMetadata})
 	if err != nil {
 		glog.Errorf("Error parsing namespace response: %s", err)
 		return err
 	}
-	if nsp.PacketType != 4 || nsp.MessageType != 0 {
-		glog.Errorf("Unexpected namespace response: %+v", nsp)
+	if packetMetadata.PacketType != 4 || packetMetadata.MessageType != 0 {
+		glog.Errorf("Unexpected namespace response: %+v",
+			packetMetadata)
 		return &transportError{fmt.Sprintf(
-			"Unexpected namespace response: %+v", nsp)}
+			"Unexpected namespace response: %+v",
+			packetMetadata)}
 	}
 	return nil
 }
 
 func sendPacket(transport Transport, packetType PacketType) {
 	encoder := NewWSEncoder("")
-	reader, err := encoder.Encode(packetType, -1, nil)
+	reader, err := encoder.EncodePacket(packetType, -1)
 	if err != nil {
 		glog.Warningf(
 			"Could not encode probe message: %s", err)
@@ -339,7 +335,7 @@ func upgrade(endpoint Endpoint, dialer WSDialer, ping int) (Transport, error) {
 		glog.Info("Websocket connection established; sending upgrade")
 	}
 	encoder := NewWSEncoder("")
-	reader, err := encoder.Encode(5, -1, nil)
+	reader, err := encoder.EncodePacket(5, -1)
 	if err != nil {
 		glog.Errorf("Error upgrading connection: %s", err)
 		return nil, err
@@ -349,7 +345,7 @@ func upgrade(endpoint Endpoint, dialer WSDialer, ping int) (Transport, error) {
 		conn:          conn,
 		quitHeartbeat: quitChannel,
 		outgoing:      &outgoing{channels: make([]chan []byte, 0)},
-		incoming:      make(chan []byte, 10),
+		incoming:      make(chan []byte, 1),
 	}
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {

@@ -1,23 +1,12 @@
 package socketio_test
 
 import (
-	"flag"
-	"fmt"
 	"net/url"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
 	. "github.com/timpalpant/go-iex/socketio"
 )
-
-func init() {
-	if flag.Lookup("alsologtostderr").Value == nil {
-		flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
-		var logLevel string
-		flag.StringVar(&logLevel, "logLevel", "5", "test")
-		flag.Lookup("v").Value.Set(logLevel)
-	}
-}
 
 func TestIEXEndpoint(t *testing.T) {
 	Convey("The Endpoint", t, func() {

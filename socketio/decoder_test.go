@@ -1,8 +1,6 @@
 package socketio_test
 
 import (
-	"flag"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -22,13 +20,6 @@ type fakeDataWithTypes struct {
 	MessageType int
 	PacketType  int
 	Namespace   string
-}
-
-func init() {
-	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
-	var logLevel string
-	flag.StringVar(&logLevel, "logLevel", "5", "test")
-	flag.Lookup("v").Value.Set(logLevel)
 }
 
 func TestUnsuccessfulDecoding(t *testing.T) {

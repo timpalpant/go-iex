@@ -6,30 +6,74 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"reflect"
 	"strings"
 
 	"github.com/golang/glog"
 )
 
-var disallowedTypes = map[reflect.Kind]struct{}{
-	reflect.Chan:          {},
-	reflect.Func:          {},
-	reflect.Interface:     {},
-	reflect.Map:           {},
-	reflect.Ptr:           {},
-	reflect.Struct:        {},
-	reflect.UnsafePointer: {},
+// Signals a subscribe or unsubscribe event.
+type subOrUnsub string
+
+const (
+	Subscribe   subOrUnsub = "subscribe"
+	Unsubscribe subOrUnsub = "unsubscribe"
+)
+
+// A subUnsubMsgFactory takes in a set of string symbols to subscribe or
+// unsubscribe to and returns an IEXMsg suitable for passing to an Encoder. This
+// is used by namespaces to encode subscriptions and unsubscriptions.
+type subUnsubMsgFactory func(signal subOrUnsub, symbols []string) *IEXMsg
+
+// Returns a subscribe/unsubscribe struct for use by all endpoints except DEEP.
+var simpleSubUnsubFactory = func(
+	signal subOrUnsub, symbols []string) *IEXMsg {
+	return &IEXMsg{
+		EventType: signal,
+		Data:      strings.Join(symbols, ","),
+	}
+}
+
+// Returns a subscribe/unsubscribe struct for use with the DEEP endpoint. Only
+// a single symbol at a time can be used. If more than one symbol is passed in
+// only the first one is used.
+var deepSubUnsubFactory = func(
+	signal subOrUnsub, symbols []string) *IEXMsg {
+	if len(symbols) > 1 {
+		glog.Error("DEEP can only subscribe to one symbol at a time")
+	}
+	json, err := json.Marshal(struct {
+		Symbols  []string `json:"symbols"`
+		Channels []string `json:"channels"`
+	}{
+		Symbols:  symbols,
+		Channels: []string{"deep"},
+	})
+	if err != nil {
+		glog.Errorf("Could not encode DEEP %s", signal)
+		return nil
+	}
+	return &IEXMsg{
+		EventType: signal,
+		Data:      string(json),
+	}
+}
+
+type IEXMsg struct {
+	// Contains a string representing subscribe or unsubscribe events.
+	EventType subOrUnsub
+	// A string containing data to send. This is specific to a given
+	// endpoint.
+	Data string
 }
 
 // Encodes messages for use with IEX SocketIO. MessageType and PacketType are
-// defined in decoder.go. The values of the fields of the passed in interface
-// are converted into a JSON array of strings. If the field value is an array,
-// the elements are converted into a single, comma-joined string before being
-// added to the resulting JSON string array. If the MessageType or PacketType
-// are less than 0, they are not set on the output.
+// defined in decoder.go. If the MessageType or PacketType are less than 0,
+// they are not set on the output.
 type Encoder interface {
-	Encode(p PacketType, m MessageType, v interface{}) (io.Reader, error)
+	// Encodes only a namespace and packet and message types.
+	EncodePacket(p PacketType, m MessageType) (io.Reader, error)
+	// Encodes a namespace, packet and message type and data.
+	EncodeMsg(p PacketType, m MessageType, msg *IEXMsg) (io.Reader, error)
 }
 
 // Wraps a strArrayEncoder and returns its contents prepended by <length>:.
@@ -37,9 +81,29 @@ type httpEncoder struct {
 	content *strArrayEncoder
 }
 
-func (enc *httpEncoder) Encode(
-	p PacketType, m MessageType, v interface{}) (io.Reader, error) {
-	inner, err := enc.content.Encode(p, m, v)
+func (enc *httpEncoder) EncodePacket(
+	p PacketType, m MessageType) (io.Reader, error) {
+	inner, err := enc.content.EncodePacket(p, m)
+	if err != nil {
+		return nil, err
+	}
+	val, err := ioutil.ReadAll(inner)
+	if err != nil {
+		if glog.V(3) {
+			glog.Warningf("Failed to read inner encoding: %q", err)
+		}
+		return nil, err
+	}
+	if glog.V(3) {
+		glog.Infof("Inner encoding: %s", val)
+	}
+	parts := []string{fmt.Sprintf("%d", len(val)), string(val)}
+	return strings.NewReader(strings.Join(parts, ":")), nil
+}
+
+func (enc *httpEncoder) EncodeMsg(
+	p PacketType, m MessageType, msg *IEXMsg) (io.Reader, error) {
+	inner, err := enc.content.EncodeMsg(p, m, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -71,8 +135,8 @@ func (e *encodeError) Error() string {
 	return e.message
 }
 
-func (enc *strArrayEncoder) Encode(
-	p PacketType, m MessageType, v interface{}) (io.Reader, error) {
+func (enc *strArrayEncoder) EncodePacket(
+	p PacketType, m MessageType) (io.Reader, error) {
 	readers := make([]io.Reader, 0)
 	if p >= 0 {
 		readers = append(readers,
@@ -86,60 +150,20 @@ func (enc *strArrayEncoder) Encode(
 		readers = append(readers,
 			strings.NewReader(enc.namespace+","))
 	}
-	if v == nil {
-		return io.MultiReader(readers...), nil
+	return io.MultiReader(readers...), nil
+}
+
+// Encodes a message, msg, of the given PacketType and MessageType. The
+// resulting format is:
+// <PacketType><MessageType><Namespace>,[msg.Event, msg.Data]
+func (enc *strArrayEncoder) EncodeMsg(
+	p PacketType, m MessageType, msg *IEXMsg) (io.Reader, error) {
+	reader, err := enc.EncodePacket(p, m)
+	if err != nil {
+		return nil, err
 	}
-	parts := make([]string, 0)
-	instance := reflect.ValueOf(v).Elem()
-	// For each of the fields in v, turn the value into a string and append
-	// it to parts. If the field is of type Array, join the elements using
-	// commas and then add the resulting string to parts. Complex types
-	// other than Array or Slice cannot be converted and will result in an
-	// error.
-	for i := 0; i < instance.NumField(); i++ {
-		field := instance.Field(i)
-		// Skip unset fields.
-		if field.IsZero() {
-			if glog.V(3) {
-				glog.Infof("Skipping unset field %s",
-					instance.Type().Field(i).Name)
-			}
-			continue
-		}
-		kind := field.Kind()
-		_, disallowed := disallowedTypes[kind]
-		if disallowed {
-			return nil, &encodeError{fmt.Sprintf(
-				"Cannot encode type: %s", field.Type())}
-		}
-		if glog.V(3) {
-			glog.Infof("Encoding %s", field.String())
-		}
-		if kind != reflect.Array && kind != reflect.Slice {
-			strEncoding := fmt.Sprintf("%v", field.Interface())
-			if len(strEncoding) > 0 {
-				parts = append(parts, strEncoding)
-			}
-		}
-		if kind == reflect.Array || kind == reflect.Slice {
-			elemType := field.Type().Elem().Kind()
-			_, disallowed = disallowedTypes[elemType]
-			if disallowed {
-				return nil, &encodeError{fmt.Sprintf(
-					"Cannot encode Array type: %s",
-					field.Type())}
-			}
-			subParts := make([]string, 0)
-			for j := 0; j < field.Len(); j++ {
-				strEncoding := fmt.Sprintf(
-					"%v", field.Index(j).Interface())
-				if len(strEncoding) > 0 {
-					subParts = append(subParts, strEncoding)
-				}
-			}
-			parts = append(parts, strings.Join(subParts, ","))
-		}
-	}
+	readers := []io.Reader{reader}
+	parts := []string{string(msg.EventType), msg.Data}
 	if glog.V(3) {
 		glog.Infof("Encoding parts: %v", parts)
 	}

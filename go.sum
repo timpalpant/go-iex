@@ -1,3 +1,5 @@
+github.com/cheekybits/genny v1.0.0 h1:uGGa4nei+j20rOSeDeP5Of12XVm7TGUd4dJA9RDitfE=
+github.com/cheekybits/genny v1.0.0/go.mod h1:+tQajlRqAUrPI7DOSpB0XAqZYtQakVtB7wXkRAgjxjQ=
 github.com/chilts/sid v0.0.0-20190607042430-660e94789ec9 h1:z0uK8UQqjMVYzvk4tiiu3obv2B44+XBsvgEJREQfnO8=
 github.com/chilts/sid v0.0.0-20190607042430-660e94789ec9/go.mod h1:Jl2neWsQaDanWORdqZ4emBl50J4/aRBBS4FyyG9/PFo=
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b h1:VKtxabqXZkF25pY9ekfRL6a582T4P37/31XEstQ5p58=

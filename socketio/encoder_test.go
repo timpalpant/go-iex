@@ -1,8 +1,8 @@
 package socketio_test
 
 import (
+	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"testing"
 
@@ -10,92 +10,15 @@ import (
 	. "github.com/timpalpant/go-iex/socketio"
 )
 
-type testStruct struct {
-	Foo string
-	Bar []int
-}
-
-type biggerTestStruct struct {
-	Foo string
-	Bar []int
-	Baz float64
-	Biz []string
-}
-
-type invalidComplex struct {
-	Invalid map[string]int
-}
-
-type invalidArrayComplex struct {
-	Invalid []map[int]string
-}
-
 func init() {
-	if flag.Lookup("alsologtostderr").Value == nil {
-		flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
-		var logLevel string
-		flag.StringVar(&logLevel, "logLevel", "5", "test")
-		flag.Lookup("v").Value.Set(logLevel)
-	}
-}
-
-func TestWebsocketEncodingErrors(t *testing.T) {
-	Convey("Websocket encoding should fail", t, func() {
-		encoder := NewWSEncoder("/")
-		Convey("on complex types", func() {
-			invalid := &invalidComplex{map[string]int{
-				"foo": 3,
-				"bar": 5,
-			}}
-			_, err := encoder.Encode(-1, -1, invalid)
-			So(err, ShouldNotBeNil)
-			So(err.Error(), ShouldContainSubstring,
-				"Cannot encode type")
-		})
-		Convey("on Arrays of complex types", func() {
-			invalid := &invalidArrayComplex{[]map[int]string{{
-				1: "one",
-				2: "two",
-			}}}
-			_, err := encoder.Encode(-1, -1, invalid)
-			So(err, ShouldNotBeNil)
-			So(err.Error(), ShouldContainSubstring,
-				"Cannot encode Array type")
-		})
-	})
-}
-
-func TestHTTPEncodingErrors(t *testing.T) {
-	Convey("HTTP encoding should fail", t, func() {
-		encoder := NewHTTPEncoder("/")
-		Convey("on complex types", func() {
-			invalid := &invalidComplex{map[string]int{
-				"foo": 3,
-				"bar": 5,
-			}}
-			_, err := encoder.Encode(-1, -1, invalid)
-			So(err, ShouldNotBeNil)
-			So(err.Error(), ShouldContainSubstring,
-				"Cannot encode type")
-		})
-		Convey("on Arrays of complex types", func() {
-			invalid := &invalidArrayComplex{[]map[int]string{{
-				1: "one",
-				2: "two",
-			}}}
-			_, err := encoder.Encode(-1, -1, invalid)
-			So(err, ShouldNotBeNil)
-			So(err.Error(), ShouldContainSubstring,
-				"Cannot encode Array type")
-		})
-	})
+	flag.Set("v", "5")
 }
 
 func TestWebsocketEncoding(t *testing.T) {
 	Convey("Websocket encoding should", t, func() {
 		Convey("correctly encode a nil type", func() {
 			encoder := NewWSEncoder("/")
-			encoded, err := encoder.Encode(-1, -1, nil)
+			encoded, err := encoder.EncodePacket(-1, -1)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -103,7 +26,7 @@ func TestWebsocketEncoding(t *testing.T) {
 		})
 		Convey("correctly encode an empty type", func() {
 			encoder := NewWSEncoder("/")
-			encoded, err := encoder.Encode(-1, -1, &testStruct{})
+			encoded, err := encoder.EncodePacket(-1, -1)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -111,7 +34,7 @@ func TestWebsocketEncoding(t *testing.T) {
 		})
 		Convey("correctly send an upgrade request", func() {
 			encoder := NewWSEncoder("")
-			encoded, err := encoder.Encode(5, -1, nil)
+			encoded, err := encoder.EncodePacket(5, -1)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -119,60 +42,75 @@ func TestWebsocketEncoding(t *testing.T) {
 		})
 		Convey("correctly encode a simple type", func() {
 			encoder := NewWSEncoder("")
-			encoded, err := encoder.Encode(-1, -1, &testStruct{
-				"foo", []int{1, 2, 3}})
+			encoding, err := json.Marshal(struct {
+				Name string
+				Ints []int
+			}{
+				Name: "foo",
+				Ints: []int{1, 2, 3},
+			})
+			So(err, ShouldBeNil)
+			iexMsg := &IEXMsg{
+				EventType: Subscribe,
+				Data:      string(encoding),
+			}
+			encoded, err := encoder.EncodeMsg(-1, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
-			So(string(val), ShouldEqual, `["foo","1,2,3"]`)
+			So(string(val), ShouldEqual,
+				`["subscribe","{\"Name\":\"foo\",\"Ints\":[1,2,3]}"]`)
 		})
 		Convey("correctly encode a namespace", func() {
 			encoder := NewWSEncoder("/")
-			encoded, err := encoder.Encode(-1, -1, &testStruct{
-				"foo", []int{1, 2, 3}})
+			iexMsg := &IEXMsg{
+				EventType: Subscribe,
+				Data:      "foo",
+			}
+			encoded, err := encoder.EncodeMsg(-1, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
-			So(string(val), ShouldEqual, `/,["foo","1,2,3"]`)
+			So(string(val), ShouldEqual, `/,["subscribe","foo"]`)
 		})
 		Convey("correctly encode a longer namespace", func() {
 			encoder := NewWSEncoder("/1.0/tops")
-			encoded, err := encoder.Encode(-1, -1, &testStruct{
-				"foo", []int{1, 2, 3}})
+			iexMsg := &IEXMsg{
+				EventType: Subscribe,
+				Data:      "foo",
+			}
+			encoded, err := encoder.EncodeMsg(-1, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
-			So(string(val), ShouldEqual, `/1.0/tops,["foo","1,2,3"]`)
+			So(string(val), ShouldEqual,
+				`/1.0/tops,["subscribe","foo"]`)
 		})
 		Convey("correctly encode the packet type", func() {
 			encoder := NewWSEncoder("/1.0/tops")
-			encoded, err := encoder.Encode(4, -1, &testStruct{
-				"foo", []int{1, 2, 3}})
+			iexMsg := &IEXMsg{
+				EventType: Subscribe,
+				Data:      "foo",
+			}
+			encoded, err := encoder.EncodeMsg(4, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
 			So(string(val), ShouldEqual,
-				`4/1.0/tops,["foo","1,2,3"]`)
+				`4/1.0/tops,["subscribe","foo"]`)
 		})
 		Convey("correctly encode the packet and message type", func() {
 			encoder := NewWSEncoder("/1.0/tops")
-			encoded, err := encoder.Encode(4, 2, &testStruct{
-				"foo", []int{1, 2, 3}})
+			iexMsg := &IEXMsg{
+				EventType: Subscribe,
+				Data:      "foo",
+			}
+			encoded, err := encoder.EncodeMsg(4, 2, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
 			So(string(val), ShouldEqual,
-				`42/1.0/tops,["foo","1,2,3"]`)
-		})
-		Convey("correctly encode a more complex type", func() {
-			encoder := NewWSEncoder("/1.0/tops")
-			encoded, err := encoder.Encode(4, 2, &biggerTestStruct{
-				"foo", []int{1, 2, 3}, 32, []string{"a", "b"}})
-			So(err, ShouldBeNil)
-			val, err := ioutil.ReadAll(encoded)
-			So(err, ShouldBeNil)
-			So(string(val), ShouldEqual,
-				`42/1.0/tops,["foo","1,2,3","32","a,b"]`)
+				`42/1.0/tops,["subscribe","foo"]`)
 		})
 	})
 }
@@ -181,7 +119,7 @@ func TestHTTPEncoding(t *testing.T) {
 	Convey("HTTP encoding should", t, func() {
 		Convey("correctly encode a nil type", func() {
 			encoder := NewHTTPEncoder("/")
-			encoded, err := encoder.Encode(-1, -1, nil)
+			encoded, err := encoder.EncodePacket(-1, -1)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -189,7 +127,7 @@ func TestHTTPEncoding(t *testing.T) {
 		})
 		Convey("correctly encode an empty type", func() {
 			encoder := NewHTTPEncoder("/")
-			encoded, err := encoder.Encode(4, 0, &testStruct{})
+			encoded, err := encoder.EncodePacket(4, 0)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -197,61 +135,75 @@ func TestHTTPEncoding(t *testing.T) {
 		})
 		Convey("correctly encode a simple type", func() {
 			encoder := NewHTTPEncoder("")
-			encoded, err := encoder.Encode(-1, -1, &testStruct{
-				"foo", []int{1, 2, 3}})
+			encoding, err := json.Marshal(struct {
+				Name string
+				Ints []int
+			}{
+				Name: "foo",
+				Ints: []int{1, 2, 3},
+			})
+			So(err, ShouldBeNil)
+			iexMsg := &IEXMsg{
+				EventType: Subscribe,
+				Data:      string(encoding),
+			}
+			encoded, err := encoder.EncodeMsg(-1, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
-			So(string(val), ShouldEqual, `15:["foo","1,2,3"]`)
+			So(string(val), ShouldEqual,
+				`51:["subscribe","{\"Name\":\"foo\",\"Ints\":[1,2,3]}"]`)
 		})
 		Convey("correctly encode a namespace", func() {
 			encoder := NewHTTPEncoder("/")
-			encoded, err := encoder.Encode(-1, -1, &testStruct{
-				"foo", []int{1, 2, 3}})
+			iexMsg := &IEXMsg{
+				EventType: Subscribe,
+				Data:      "foo",
+			}
+			encoded, err := encoder.EncodeMsg(-1, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
-			So(string(val), ShouldEqual, `17:/,["foo","1,2,3"]`)
+			So(string(val), ShouldEqual, `21:/,["subscribe","foo"]`)
 		})
 		Convey("correctly encode a longer namespace", func() {
 			encoder := NewHTTPEncoder("/1.0/tops")
-			encoded, err := encoder.Encode(-1, -1, &testStruct{
-				"foo", []int{1, 2, 3}})
+			iexMsg := &IEXMsg{
+				EventType: Subscribe,
+				Data:      "foo",
+			}
+			encoded, err := encoder.EncodeMsg(-1, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
 			So(string(val), ShouldEqual,
-				`25:/1.0/tops,["foo","1,2,3"]`)
+				`29:/1.0/tops,["subscribe","foo"]`)
 		})
 		Convey("correctly encode the packet type", func() {
 			encoder := NewHTTPEncoder("/1.0/tops")
-			encoded, err := encoder.Encode(4, -1, &testStruct{
-				"foo", []int{1, 2, 3}})
+			iexMsg := &IEXMsg{
+				EventType: Subscribe,
+				Data:      "foo",
+			}
+			encoded, err := encoder.EncodeMsg(4, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
 			So(string(val), ShouldEqual,
-				`26:4/1.0/tops,["foo","1,2,3"]`)
+				`30:4/1.0/tops,["subscribe","foo"]`)
 		})
 		Convey("correctly encode the packet and message type", func() {
 			encoder := NewHTTPEncoder("/1.0/tops")
-			encoded, err := encoder.Encode(4, 2, &testStruct{
-				"foo", []int{1, 2, 3}})
+			iexMsg := &IEXMsg{
+				EventType: Subscribe,
+				Data:      "foo",
+			}
+			encoded, err := encoder.EncodeMsg(4, 2, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
 			So(string(val), ShouldEqual,
-				`27:42/1.0/tops,["foo","1,2,3"]`)
-		})
-		Convey("correctly encode a more complex type", func() {
-			encoder := NewHTTPEncoder("/1.0/tops")
-			encoded, err := encoder.Encode(4, 2, &biggerTestStruct{
-				"foo", []int{1, 2, 3}, 32, []string{"a", "b"}})
-			So(err, ShouldBeNil)
-			val, err := ioutil.ReadAll(encoded)
-			So(err, ShouldBeNil)
-			So(string(val), ShouldEqual,
-				`38:42/1.0/tops,["foo","1,2,3","32","a,b"]`)
+				`31:42/1.0/tops,["subscribe","foo"]`)
 		})
 	})
 }
