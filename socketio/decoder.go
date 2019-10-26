@@ -40,7 +40,7 @@ const (
 )
 
 // The general SocketIO packet metadata.
-type packetMetadata struct {
+type PacketData struct {
 	PacketType  PacketType
 	MessageType MessageType
 	Namespace   string

@@ -109,7 +109,7 @@ type IexTOPSNamespace struct {
 	connections map[int]*IexTOPSConnection
 	// Receives raw messages from the Transport. Only messages for the
 	// current namespace will be received.
-	msgChannel <-chan packetMetadata
+	msgChannel <-chan PacketData
 	// For encoding outgoing messages in this namespace.
 	encoder Encoder
 	// Used for sending messages to IEX SocketIO.
@@ -162,7 +162,7 @@ func (i *IexTOPSNamespace) connect() error {
 // Given a string representing a JSON IEX message type, parse out the symbol and
 // the message and pass the message to each connection subscribed to the symbol.
 // Use a go routine to prevent from blocking.
-func (i *IexTOPSNamespace) fanout(pkt packetMetadata) {
+func (i *IexTOPSNamespace) fanout(pkt PacketData) {
 	go func() {
 		// This "symbol only" struct is necessary because this class
 		// is a genny generic. Therefore, even though all IEX messages
@@ -241,7 +241,7 @@ func (i *IexTOPSNamespace) GetConnection(
 }
 
 func NewIexTOPSNamespace(
-	ch <-chan packetMetadata, encoder Encoder,
+	ch <-chan PacketData, encoder Encoder,
 	writer io.Writer, subUnsubMsgFactory subUnsubMsgFactory,
 	closeFunc func()) *IexTOPSNamespace {
 	newNs := &IexTOPSNamespace{
@@ -352,7 +352,7 @@ type IexLastNamespace struct {
 	connections map[int]*IexLastConnection
 	// Receives raw messages from the Transport. Only messages for the
 	// current namespace will be received.
-	msgChannel <-chan packetMetadata
+	msgChannel <-chan PacketData
 	// For encoding outgoing messages in this namespace.
 	encoder Encoder
 	// Used for sending messages to IEX SocketIO.
@@ -405,7 +405,7 @@ func (i *IexLastNamespace) connect() error {
 // Given a string representing a JSON IEX message type, parse out the symbol and
 // the message and pass the message to each connection subscribed to the symbol.
 // Use a go routine to prevent from blocking.
-func (i *IexLastNamespace) fanout(pkt packetMetadata) {
+func (i *IexLastNamespace) fanout(pkt PacketData) {
 	go func() {
 		// This "symbol only" struct is necessary because this class
 		// is a genny generic. Therefore, even though all IEX messages
@@ -484,7 +484,7 @@ func (i *IexLastNamespace) GetConnection(
 }
 
 func NewIexLastNamespace(
-	ch <-chan packetMetadata, encoder Encoder,
+	ch <-chan PacketData, encoder Encoder,
 	writer io.Writer, subUnsubMsgFactory subUnsubMsgFactory,
 	closeFunc func()) *IexLastNamespace {
 	newNs := &IexLastNamespace{
@@ -595,7 +595,7 @@ type IexDEEPNamespace struct {
 	connections map[int]*IexDEEPConnection
 	// Receives raw messages from the Transport. Only messages for the
 	// current namespace will be received.
-	msgChannel <-chan packetMetadata
+	msgChannel <-chan PacketData
 	// For encoding outgoing messages in this namespace.
 	encoder Encoder
 	// Used for sending messages to IEX SocketIO.
@@ -648,7 +648,7 @@ func (i *IexDEEPNamespace) connect() error {
 // Given a string representing a JSON IEX message type, parse out the symbol and
 // the message and pass the message to each connection subscribed to the symbol.
 // Use a go routine to prevent from blocking.
-func (i *IexDEEPNamespace) fanout(pkt packetMetadata) {
+func (i *IexDEEPNamespace) fanout(pkt PacketData) {
 	go func() {
 		// This "symbol only" struct is necessary because this class
 		// is a genny generic. Therefore, even though all IEX messages
@@ -727,7 +727,7 @@ func (i *IexDEEPNamespace) GetConnection(
 }
 
 func NewIexDEEPNamespace(
-	ch <-chan packetMetadata, encoder Encoder,
+	ch <-chan PacketData, encoder Encoder,
 	writer io.Writer, subUnsubMsgFactory subUnsubMsgFactory,
 	closeFunc func()) *IexDEEPNamespace {
 	newNs := &IexDEEPNamespace{

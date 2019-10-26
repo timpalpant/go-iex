@@ -395,11 +395,17 @@ func TestTransport(t *testing.T) {
 			So(err, ShouldBeNil)
 			rc3, err := trans.GetReadChannel()
 			So(err, ShouldBeNil)
-			message := []byte("Hello World")
+			message := []byte("42/1.0/last,[\"some\":\"data\"]")
 			fc.readChan <- message
-			So(<-rc1, ShouldResemble, message)
-			So(<-rc2, ShouldResemble, message)
-			So(<-rc3, ShouldResemble, message)
+			expected := PacketData{
+				PacketType:  Message,
+				MessageType: Event,
+				Namespace:   "/1.0/last",
+				Data:        "[\"some\":\"data\"]",
+			}
+			So(<-rc1, ShouldResemble, expected)
+			So(<-rc2, ShouldResemble, expected)
+			So(<-rc3, ShouldResemble, expected)
 		})
 	})
 }

@@ -63,7 +63,7 @@ type Transport interface {
 	// Returns a pointer to a read channel. A new channel is returned with
 	// each call, and all channels will receive a copy of all incoming
 	// messages.
-	GetReadChannel() (<-chan []byte, error)
+	GetReadChannel() (<-chan PacketData, error)
 
 	// Closes the underlying Websocket connection.
 	Close()
@@ -73,7 +73,7 @@ type Transport interface {
 type outgoing struct {
 	sync.RWMutex
 	// A collection of channels for transmitting messages to consumers.
-	channels []chan []byte
+	channels []chan PacketData
 }
 
 type transport struct {
@@ -101,7 +101,7 @@ func (t *transport) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (t *transport) GetReadChannel() (<-chan []byte, error) {
+func (t *transport) GetReadChannel() (<-chan PacketData, error) {
 	t.outgoing.RLock()
 	defer t.outgoing.RUnlock()
 	if t.closed {
@@ -109,7 +109,7 @@ func (t *transport) GetReadChannel() (<-chan []byte, error) {
 			"Cannot read from a closed transport"}
 	}
 	t.outgoing.channels = append(
-		t.outgoing.channels, make(chan []byte, 1))
+		t.outgoing.channels, make(chan PacketData, 1))
 	return t.outgoing.channels[len(t.outgoing.channels)-1], nil
 }
 
@@ -174,8 +174,11 @@ func (t *transport) startReadAndWriteRoutines() {
 				break
 			}
 			t.RUnlock()
+			var metadata PacketData
+			remaining := ParseMetadata(string(message), &metadata)
+			metadata.Data = remaining
 			for _, ch := range t.outgoing.channels {
-				ch <- message
+				ch <- metadata
 			}
 		}
 	}()
@@ -254,18 +257,18 @@ func joinDefaultNsp(endpoint Endpoint, client doClient) error {
 		glog.Errorf("Error connecting to the empty room: %s", err)
 		return err
 	}
-	var packetMetadata packetMetadata
-	err = HTTPToJSON(resp, []interface{}{&packetMetadata})
+	var packetData PacketData
+	err = HTTPToJSON(resp, []interface{}{&packetData})
 	if err != nil {
 		glog.Errorf("Error parsing namespace response: %s", err)
 		return err
 	}
-	if packetMetadata.PacketType != 4 || packetMetadata.MessageType != 0 {
+	if packetData.PacketType != 4 || packetData.MessageType != 0 {
 		glog.Errorf("Unexpected namespace response: %+v",
-			packetMetadata)
+			packetData)
 		return &transportError{fmt.Sprintf(
 			"Unexpected namespace response: %+v",
-			packetMetadata)}
+			packetData)}
 	}
 	return nil
 }
@@ -344,8 +347,9 @@ func upgrade(endpoint Endpoint, dialer WSDialer, ping int) (Transport, error) {
 	trans := &transport{
 		conn:          conn,
 		quitHeartbeat: quitChannel,
-		outgoing:      &outgoing{channels: make([]chan []byte, 0)},
-		incoming:      make(chan []byte, 1),
+		outgoing: &outgoing{channels: make(
+			[]chan PacketData, 0)},
+		incoming: make(chan []byte, 1),
 	}
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {

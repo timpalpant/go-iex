@@ -108,7 +108,7 @@ type IEXMsgTypeNamespace struct {
 	connections map[int]*IEXMsgTypeConnection
 	// Receives raw messages from the Transport. Only messages for the
 	// current namespace will be received.
-	msgChannel <-chan packetMetadata
+	msgChannel <-chan PacketData
 	// For encoding outgoing messages in this namespace.
 	encoder Encoder
 	// Used for sending messages to IEX SocketIO.
@@ -161,7 +161,7 @@ func (i *IEXMsgTypeNamespace) connect() error {
 // Given a string representing a JSON IEX message type, parse out the symbol and
 // the message and pass the message to each connection subscribed to the symbol.
 // Use a go routine to prevent from blocking.
-func (i *IEXMsgTypeNamespace) fanout(pkt packetMetadata) {
+func (i *IEXMsgTypeNamespace) fanout(pkt PacketData) {
 	go func() {
 		// This "symbol only" struct is necessary because this class
 		// is a genny generic. Therefore, even though all IEX messages
@@ -240,7 +240,7 @@ func (i *IEXMsgTypeNamespace) GetConnection(
 }
 
 func NewIEXMsgTypeNamespace(
-	ch <-chan packetMetadata, encoder Encoder,
+	ch <-chan PacketData, encoder Encoder,
 	writer io.Writer, subUnsubMsgFactory subUnsubMsgFactory,
 	closeFunc func()) *IEXMsgTypeNamespace {
 	newNs := &IEXMsgTypeNamespace{

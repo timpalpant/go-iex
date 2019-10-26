@@ -55,7 +55,7 @@ func waitOnClose(c chan interface{}) {
 
 func TestNamespace(t *testing.T) {
 	Convey("The IexTOPSNamespace should", t, func() {
-		ch := make(chan packetMetadata, 1)
+		ch := make(chan PacketData, 1)
 		encoder := NewWSEncoder("/1.0/tops")
 		writer := &channelWriter{
 			Messages: make([]string, 0),
@@ -140,7 +140,7 @@ func TestNamespace(t *testing.T) {
 			conn1 := ns.GetConnection("fb")
 			conn2 := ns.GetConnection("fb")
 			waitOnClose(writer.C)
-			ch <- packetMetadata{
+			ch <- PacketData{
 				Data: "{\"symbol\":\"fb\",\"bidsize\":12}",
 			}
 			expected := iex.TOPS{
@@ -157,7 +157,7 @@ func TestNamespace(t *testing.T) {
 			conn1 := ns.GetConnection("fb")
 			conn2 := ns.GetConnection("goog")
 			waitOnClose(writer.C)
-			ch <- packetMetadata{
+			ch <- PacketData{
 				Data: "{\"symbol\":\"fb\",\"bidsize\":12}",
 			}
 			fbExpected := iex.TOPS{
@@ -166,7 +166,7 @@ func TestNamespace(t *testing.T) {
 			}
 			So(<-conn1.C, ShouldResemble, fbExpected)
 			So(len(conn2.C), ShouldEqual, 0)
-			ch <- packetMetadata{
+			ch <- PacketData{
 				Data: "{\"symbol\":\"goog\",\"bidsize\":11}",
 			}
 			googExpected := iex.TOPS{
@@ -175,7 +175,7 @@ func TestNamespace(t *testing.T) {
 			}
 			So(len(conn1.C), ShouldEqual, 0)
 			So(<-conn2.C, ShouldResemble, googExpected)
-			ch <- packetMetadata{
+			ch <- PacketData{
 				Data: "{\"symbol\":\"aig+\",\"bidsize\":11}",
 			}
 			So(len(conn1.C), ShouldEqual, 0)
