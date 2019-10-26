@@ -14,7 +14,7 @@ import (
 	"github.com/timpalpant/go-iex"
 )
 
-// The iexTOPSNamespace is a generic class built using Genny.
+// The iexMsgTypeNamespace is a generic class built using Genny.
 // https://github.com/cheekybits/genny
 // Run "go generate" to re-generate the specific namespace types.
 
@@ -22,7 +22,7 @@ import (
 // for the symbols subscribed to will be passed along.
 //
 // The close method *must* be called before garbage collection.
-type iexTOPSConnection struct {
+type IexTOPSConnection struct {
 	// For closing.
 	sync.Once
 	// Guards the closed value.
@@ -46,7 +46,7 @@ type iexTOPSConnection struct {
 // Cleans up references to this connection in the Namespace. Messages will no
 // longer be received and the Subscribe/Unsubscribe methods can no longer be
 // called.
-func (i *iexTOPSConnection) Close() {
+func (i *IexTOPSConnection) Close() {
 	i.Do(func() {
 		i.Lock()
 		defer i.Unlock()
@@ -57,7 +57,7 @@ func (i *iexTOPSConnection) Close() {
 
 // Subscribes to the given symbols. An error is returned if the connection is
 // already closed.
-func (i *iexTOPSConnection) Subscribe(symbols ...string) error {
+func (i *IexTOPSConnection) Subscribe(symbols ...string) error {
 	i.RLock()
 	defer i.RUnlock()
 	if i.closed {
@@ -76,7 +76,7 @@ func (i *iexTOPSConnection) Subscribe(symbols ...string) error {
 
 // Unsubscribes to the given symbols. An error is returned if the connection is
 // already closed.
-func (i *iexTOPSConnection) Unsubscribe(symbols ...string) error {
+func (i *IexTOPSConnection) Unsubscribe(symbols ...string) error {
 	i.RLock()
 	defer i.RUnlock()
 	if i.closed {
@@ -94,19 +94,19 @@ func (i *iexTOPSConnection) Unsubscribe(symbols ...string) error {
 }
 
 // Returns true if this connection is subscribed to the given symbol.
-func (i *iexTOPSConnection) Subscribed(symbol string) bool {
+func (i *IexTOPSConnection) Subscribed(symbol string) bool {
 	return i.subscriptions.Subscribed(symbol)
 }
 
 // Receives messages for a given namespace and forwards them to endpoints.
-type iexTOPSNamespace struct {
+type IexTOPSNamespace struct {
 	// Used to guard access to the fanout channels.
 	sync.RWMutex
 
 	// The ID to use for the next endpoint created.
 	nextId int
 	// Active endpoints by ID.
-	connections map[int]*iexTOPSConnection
+	connections map[int]*IexTOPSConnection
 	// Receives raw messages from the Transport. Only messages for the
 	// current namespace will be received.
 	msgChannel <-chan packetMetadata
@@ -120,7 +120,7 @@ type iexTOPSNamespace struct {
 	closeFunc func()
 }
 
-func (i *iexTOPSNamespace) writeToReader(r io.Reader) error {
+func (i *IexTOPSNamespace) writeToReader(r io.Reader) error {
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
 		return err
@@ -136,7 +136,7 @@ func (i *iexTOPSNamespace) writeToReader(r io.Reader) error {
 
 // Sends a subscribe message and starts listening for incoming data. This is
 // called when the namespace is created.
-func (i *iexTOPSNamespace) connect() error {
+func (i *IexTOPSNamespace) connect() error {
 	r, err := i.encoder.EncodePacket(Message, Connect)
 	if err != nil {
 		return err
@@ -162,23 +162,23 @@ func (i *iexTOPSNamespace) connect() error {
 // Given a string representing a JSON IEX message type, parse out the symbol and
 // the message and pass the message to each connection subscribed to the symbol.
 // Use a go routine to prevent from blocking.
-func (i *iexTOPSNamespace) fanout(pkt packetMetadata) {
+func (i *IexTOPSNamespace) fanout(pkt packetMetadata) {
 	go func() {
 		// This "symbol only" struct is necessary because this class
 		// is a genny generic. Therefore, even though all IEX messages
-		// have a "symbol" field, iexTOPS.symbol is not type safe.
+		// have a "symbol" field, iexMsgType.symbol is not type safe.
 		var symbol struct {
 			Symbol string
 		}
 		if err := ParseToJSON(pkt.Data, &symbol); err != nil {
-			glog.Errorf("No symbol found for IexTOPS: %s - %v",
+			glog.Errorf("No symbol found for iexMsgType: %s - %v",
 				err, pkt)
 		}
 		// Now that the symbol has been extraced, the specific message
 		// can be extracted from the data.
 		var decoded iex.TOPS
 		if err := ParseToJSON(pkt.Data, &decoded); err != nil {
-			glog.Errorf("Could not decode IexTOPS: %s - %v",
+			glog.Errorf("Could not decode iexMsgType: %s - %v",
 				err, pkt)
 		}
 		i.RLock()
@@ -193,13 +193,13 @@ func (i *iexTOPSNamespace) fanout(pkt packetMetadata) {
 
 // Returns a connection that will receive messages for the passed in symbols.
 // If no symbols are passed in, they can be added/removed later.
-func (i *iexTOPSNamespace) GetConnection(
-	symbols ...string) *iexTOPSConnection {
+func (i *IexTOPSNamespace) GetConnection(
+	symbols ...string) *IexTOPSConnection {
 	i.Lock()
 	defer i.Unlock()
 	i.nextId++
 	subUnsubClose := make(chan *IEXMsg, 0)
-	connection := &iexTOPSConnection{
+	connection := &IexTOPSConnection{
 		id:                 i.nextId,
 		C:                  make(chan iex.TOPS, 1),
 		subscriptions:      NewPresenceSubscriber(),
@@ -240,13 +240,13 @@ func (i *iexTOPSNamespace) GetConnection(
 	return connection
 }
 
-func newIexTOPSNamespace(
+func NewIexTOPSNamespace(
 	ch <-chan packetMetadata, encoder Encoder,
 	writer io.Writer, subUnsubMsgFactory subUnsubMsgFactory,
-	closeFunc func()) *iexTOPSNamespace {
-	newNs := &iexTOPSNamespace{
+	closeFunc func()) *IexTOPSNamespace {
+	newNs := &IexTOPSNamespace{
 		nextId:             0,
-		connections:        make(map[int]*iexTOPSConnection),
+		connections:        make(map[int]*IexTOPSConnection),
 		msgChannel:         ch,
 		encoder:            encoder,
 		writer:             writer,
@@ -257,7 +257,7 @@ func newIexTOPSNamespace(
 	return newNs
 }
 
-// The iexLastNamespace is a generic class built using Genny.
+// The iexMsgTypeNamespace is a generic class built using Genny.
 // https://github.com/cheekybits/genny
 // Run "go generate" to re-generate the specific namespace types.
 
@@ -265,7 +265,7 @@ func newIexTOPSNamespace(
 // for the symbols subscribed to will be passed along.
 //
 // The close method *must* be called before garbage collection.
-type iexLastConnection struct {
+type IexLastConnection struct {
 	// For closing.
 	sync.Once
 	// Guards the closed value.
@@ -289,7 +289,7 @@ type iexLastConnection struct {
 // Cleans up references to this connection in the Namespace. Messages will no
 // longer be received and the Subscribe/Unsubscribe methods can no longer be
 // called.
-func (i *iexLastConnection) Close() {
+func (i *IexLastConnection) Close() {
 	i.Do(func() {
 		i.Lock()
 		defer i.Unlock()
@@ -300,7 +300,7 @@ func (i *iexLastConnection) Close() {
 
 // Subscribes to the given symbols. An error is returned if the connection is
 // already closed.
-func (i *iexLastConnection) Subscribe(symbols ...string) error {
+func (i *IexLastConnection) Subscribe(symbols ...string) error {
 	i.RLock()
 	defer i.RUnlock()
 	if i.closed {
@@ -319,7 +319,7 @@ func (i *iexLastConnection) Subscribe(symbols ...string) error {
 
 // Unsubscribes to the given symbols. An error is returned if the connection is
 // already closed.
-func (i *iexLastConnection) Unsubscribe(symbols ...string) error {
+func (i *IexLastConnection) Unsubscribe(symbols ...string) error {
 	i.RLock()
 	defer i.RUnlock()
 	if i.closed {
@@ -337,19 +337,19 @@ func (i *iexLastConnection) Unsubscribe(symbols ...string) error {
 }
 
 // Returns true if this connection is subscribed to the given symbol.
-func (i *iexLastConnection) Subscribed(symbol string) bool {
+func (i *IexLastConnection) Subscribed(symbol string) bool {
 	return i.subscriptions.Subscribed(symbol)
 }
 
 // Receives messages for a given namespace and forwards them to endpoints.
-type iexLastNamespace struct {
+type IexLastNamespace struct {
 	// Used to guard access to the fanout channels.
 	sync.RWMutex
 
 	// The ID to use for the next endpoint created.
 	nextId int
 	// Active endpoints by ID.
-	connections map[int]*iexLastConnection
+	connections map[int]*IexLastConnection
 	// Receives raw messages from the Transport. Only messages for the
 	// current namespace will be received.
 	msgChannel <-chan packetMetadata
@@ -363,7 +363,7 @@ type iexLastNamespace struct {
 	closeFunc func()
 }
 
-func (i *iexLastNamespace) writeToReader(r io.Reader) error {
+func (i *IexLastNamespace) writeToReader(r io.Reader) error {
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
 		return err
@@ -379,7 +379,7 @@ func (i *iexLastNamespace) writeToReader(r io.Reader) error {
 
 // Sends a subscribe message and starts listening for incoming data. This is
 // called when the namespace is created.
-func (i *iexLastNamespace) connect() error {
+func (i *IexLastNamespace) connect() error {
 	r, err := i.encoder.EncodePacket(Message, Connect)
 	if err != nil {
 		return err
@@ -405,23 +405,23 @@ func (i *iexLastNamespace) connect() error {
 // Given a string representing a JSON IEX message type, parse out the symbol and
 // the message and pass the message to each connection subscribed to the symbol.
 // Use a go routine to prevent from blocking.
-func (i *iexLastNamespace) fanout(pkt packetMetadata) {
+func (i *IexLastNamespace) fanout(pkt packetMetadata) {
 	go func() {
 		// This "symbol only" struct is necessary because this class
 		// is a genny generic. Therefore, even though all IEX messages
-		// have a "symbol" field, iexLast.symbol is not type safe.
+		// have a "symbol" field, iexMsgType.symbol is not type safe.
 		var symbol struct {
 			Symbol string
 		}
 		if err := ParseToJSON(pkt.Data, &symbol); err != nil {
-			glog.Errorf("No symbol found for IexLast: %s - %v",
+			glog.Errorf("No symbol found for iexMsgType: %s - %v",
 				err, pkt)
 		}
 		// Now that the symbol has been extraced, the specific message
 		// can be extracted from the data.
 		var decoded iex.Last
 		if err := ParseToJSON(pkt.Data, &decoded); err != nil {
-			glog.Errorf("Could not decode IexLast: %s - %v",
+			glog.Errorf("Could not decode iexMsgType: %s - %v",
 				err, pkt)
 		}
 		i.RLock()
@@ -436,13 +436,13 @@ func (i *iexLastNamespace) fanout(pkt packetMetadata) {
 
 // Returns a connection that will receive messages for the passed in symbols.
 // If no symbols are passed in, they can be added/removed later.
-func (i *iexLastNamespace) GetConnection(
-	symbols ...string) *iexLastConnection {
+func (i *IexLastNamespace) GetConnection(
+	symbols ...string) *IexLastConnection {
 	i.Lock()
 	defer i.Unlock()
 	i.nextId++
 	subUnsubClose := make(chan *IEXMsg, 0)
-	connection := &iexLastConnection{
+	connection := &IexLastConnection{
 		id:                 i.nextId,
 		C:                  make(chan iex.Last, 1),
 		subscriptions:      NewPresenceSubscriber(),
@@ -483,13 +483,13 @@ func (i *iexLastNamespace) GetConnection(
 	return connection
 }
 
-func newIexLastNamespace(
+func NewIexLastNamespace(
 	ch <-chan packetMetadata, encoder Encoder,
 	writer io.Writer, subUnsubMsgFactory subUnsubMsgFactory,
-	closeFunc func()) *iexLastNamespace {
-	newNs := &iexLastNamespace{
+	closeFunc func()) *IexLastNamespace {
+	newNs := &IexLastNamespace{
 		nextId:             0,
-		connections:        make(map[int]*iexLastConnection),
+		connections:        make(map[int]*IexLastConnection),
 		msgChannel:         ch,
 		encoder:            encoder,
 		writer:             writer,
@@ -500,7 +500,7 @@ func newIexLastNamespace(
 	return newNs
 }
 
-// The iexDEEPNamespace is a generic class built using Genny.
+// The iexMsgTypeNamespace is a generic class built using Genny.
 // https://github.com/cheekybits/genny
 // Run "go generate" to re-generate the specific namespace types.
 
@@ -508,7 +508,7 @@ func newIexLastNamespace(
 // for the symbols subscribed to will be passed along.
 //
 // The close method *must* be called before garbage collection.
-type iexDEEPConnection struct {
+type IexDEEPConnection struct {
 	// For closing.
 	sync.Once
 	// Guards the closed value.
@@ -532,7 +532,7 @@ type iexDEEPConnection struct {
 // Cleans up references to this connection in the Namespace. Messages will no
 // longer be received and the Subscribe/Unsubscribe methods can no longer be
 // called.
-func (i *iexDEEPConnection) Close() {
+func (i *IexDEEPConnection) Close() {
 	i.Do(func() {
 		i.Lock()
 		defer i.Unlock()
@@ -543,7 +543,7 @@ func (i *iexDEEPConnection) Close() {
 
 // Subscribes to the given symbols. An error is returned if the connection is
 // already closed.
-func (i *iexDEEPConnection) Subscribe(symbols ...string) error {
+func (i *IexDEEPConnection) Subscribe(symbols ...string) error {
 	i.RLock()
 	defer i.RUnlock()
 	if i.closed {
@@ -562,7 +562,7 @@ func (i *iexDEEPConnection) Subscribe(symbols ...string) error {
 
 // Unsubscribes to the given symbols. An error is returned if the connection is
 // already closed.
-func (i *iexDEEPConnection) Unsubscribe(symbols ...string) error {
+func (i *IexDEEPConnection) Unsubscribe(symbols ...string) error {
 	i.RLock()
 	defer i.RUnlock()
 	if i.closed {
@@ -580,19 +580,19 @@ func (i *iexDEEPConnection) Unsubscribe(symbols ...string) error {
 }
 
 // Returns true if this connection is subscribed to the given symbol.
-func (i *iexDEEPConnection) Subscribed(symbol string) bool {
+func (i *IexDEEPConnection) Subscribed(symbol string) bool {
 	return i.subscriptions.Subscribed(symbol)
 }
 
 // Receives messages for a given namespace and forwards them to endpoints.
-type iexDEEPNamespace struct {
+type IexDEEPNamespace struct {
 	// Used to guard access to the fanout channels.
 	sync.RWMutex
 
 	// The ID to use for the next endpoint created.
 	nextId int
 	// Active endpoints by ID.
-	connections map[int]*iexDEEPConnection
+	connections map[int]*IexDEEPConnection
 	// Receives raw messages from the Transport. Only messages for the
 	// current namespace will be received.
 	msgChannel <-chan packetMetadata
@@ -606,7 +606,7 @@ type iexDEEPNamespace struct {
 	closeFunc func()
 }
 
-func (i *iexDEEPNamespace) writeToReader(r io.Reader) error {
+func (i *IexDEEPNamespace) writeToReader(r io.Reader) error {
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
 		return err
@@ -622,7 +622,7 @@ func (i *iexDEEPNamespace) writeToReader(r io.Reader) error {
 
 // Sends a subscribe message and starts listening for incoming data. This is
 // called when the namespace is created.
-func (i *iexDEEPNamespace) connect() error {
+func (i *IexDEEPNamespace) connect() error {
 	r, err := i.encoder.EncodePacket(Message, Connect)
 	if err != nil {
 		return err
@@ -648,23 +648,23 @@ func (i *iexDEEPNamespace) connect() error {
 // Given a string representing a JSON IEX message type, parse out the symbol and
 // the message and pass the message to each connection subscribed to the symbol.
 // Use a go routine to prevent from blocking.
-func (i *iexDEEPNamespace) fanout(pkt packetMetadata) {
+func (i *IexDEEPNamespace) fanout(pkt packetMetadata) {
 	go func() {
 		// This "symbol only" struct is necessary because this class
 		// is a genny generic. Therefore, even though all IEX messages
-		// have a "symbol" field, iexDEEP.symbol is not type safe.
+		// have a "symbol" field, iexMsgType.symbol is not type safe.
 		var symbol struct {
 			Symbol string
 		}
 		if err := ParseToJSON(pkt.Data, &symbol); err != nil {
-			glog.Errorf("No symbol found for IexDEEP: %s - %v",
+			glog.Errorf("No symbol found for iexMsgType: %s - %v",
 				err, pkt)
 		}
 		// Now that the symbol has been extraced, the specific message
 		// can be extracted from the data.
 		var decoded iex.DEEP
 		if err := ParseToJSON(pkt.Data, &decoded); err != nil {
-			glog.Errorf("Could not decode IexDEEP: %s - %v",
+			glog.Errorf("Could not decode iexMsgType: %s - %v",
 				err, pkt)
 		}
 		i.RLock()
@@ -679,13 +679,13 @@ func (i *iexDEEPNamespace) fanout(pkt packetMetadata) {
 
 // Returns a connection that will receive messages for the passed in symbols.
 // If no symbols are passed in, they can be added/removed later.
-func (i *iexDEEPNamespace) GetConnection(
-	symbols ...string) *iexDEEPConnection {
+func (i *IexDEEPNamespace) GetConnection(
+	symbols ...string) *IexDEEPConnection {
 	i.Lock()
 	defer i.Unlock()
 	i.nextId++
 	subUnsubClose := make(chan *IEXMsg, 0)
-	connection := &iexDEEPConnection{
+	connection := &IexDEEPConnection{
 		id:                 i.nextId,
 		C:                  make(chan iex.DEEP, 1),
 		subscriptions:      NewPresenceSubscriber(),
@@ -726,13 +726,13 @@ func (i *iexDEEPNamespace) GetConnection(
 	return connection
 }
 
-func newIexDEEPNamespace(
+func NewIexDEEPNamespace(
 	ch <-chan packetMetadata, encoder Encoder,
 	writer io.Writer, subUnsubMsgFactory subUnsubMsgFactory,
-	closeFunc func()) *iexDEEPNamespace {
-	newNs := &iexDEEPNamespace{
+	closeFunc func()) *IexDEEPNamespace {
+	newNs := &IexDEEPNamespace{
 		nextId:             0,
-		connections:        make(map[int]*iexDEEPConnection),
+		connections:        make(map[int]*IexDEEPConnection),
 		msgChannel:         ch,
 		encoder:            encoder,
 		writer:             writer,

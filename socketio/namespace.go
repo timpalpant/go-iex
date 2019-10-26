@@ -15,13 +15,13 @@ import (
 )
 
 // The generic type representing the IEX message parsed by the namespace.
-type iexMsgType generic.Type
+type IEXMsgType generic.Type
 
 // Contains a channel for receiving namespace specific messages. Only messages
 // for the symbols subscribed to will be passed along.
 //
 // The close method *must* be called before garbage collection.
-type iexMsgTypeConnection struct {
+type IEXMsgTypeConnection struct {
 	// For closing.
 	sync.Once
 	// Guards the closed value.
@@ -30,7 +30,7 @@ type iexMsgTypeConnection struct {
 	// The ID of this endpoint. Used for removing it from the namespace.
 	id int
 	// A channel for passing along namespace specific messages.
-	C chan iexMsgType
+	C chan IEXMsgType
 	// Used to track which symbols this enpoint is subscribed to.
 	subscriptions Subscriber
 	// The factory function used to generate subscribe/unsubscribe messages.
@@ -45,7 +45,7 @@ type iexMsgTypeConnection struct {
 // Cleans up references to this connection in the Namespace. Messages will no
 // longer be received and the Subscribe/Unsubscribe methods can no longer be
 // called.
-func (i *iexMsgTypeConnection) Close() {
+func (i *IEXMsgTypeConnection) Close() {
 	i.Do(func() {
 		i.Lock()
 		defer i.Unlock()
@@ -56,7 +56,7 @@ func (i *iexMsgTypeConnection) Close() {
 
 // Subscribes to the given symbols. An error is returned if the connection is
 // already closed.
-func (i *iexMsgTypeConnection) Subscribe(symbols ...string) error {
+func (i *IEXMsgTypeConnection) Subscribe(symbols ...string) error {
 	i.RLock()
 	defer i.RUnlock()
 	if i.closed {
@@ -75,7 +75,7 @@ func (i *iexMsgTypeConnection) Subscribe(symbols ...string) error {
 
 // Unsubscribes to the given symbols. An error is returned if the connection is
 // already closed.
-func (i *iexMsgTypeConnection) Unsubscribe(symbols ...string) error {
+func (i *IEXMsgTypeConnection) Unsubscribe(symbols ...string) error {
 	i.RLock()
 	defer i.RUnlock()
 	if i.closed {
@@ -93,19 +93,19 @@ func (i *iexMsgTypeConnection) Unsubscribe(symbols ...string) error {
 }
 
 // Returns true if this connection is subscribed to the given symbol.
-func (i *iexMsgTypeConnection) Subscribed(symbol string) bool {
+func (i *IEXMsgTypeConnection) Subscribed(symbol string) bool {
 	return i.subscriptions.Subscribed(symbol)
 }
 
 // Receives messages for a given namespace and forwards them to endpoints.
-type iexMsgTypeNamespace struct {
+type IEXMsgTypeNamespace struct {
 	// Used to guard access to the fanout channels.
 	sync.RWMutex
 
 	// The ID to use for the next endpoint created.
 	nextId int
 	// Active endpoints by ID.
-	connections map[int]*iexMsgTypeConnection
+	connections map[int]*IEXMsgTypeConnection
 	// Receives raw messages from the Transport. Only messages for the
 	// current namespace will be received.
 	msgChannel <-chan packetMetadata
@@ -119,7 +119,7 @@ type iexMsgTypeNamespace struct {
 	closeFunc func()
 }
 
-func (i *iexMsgTypeNamespace) writeToReader(r io.Reader) error {
+func (i *IEXMsgTypeNamespace) writeToReader(r io.Reader) error {
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
 		return err
@@ -135,7 +135,7 @@ func (i *iexMsgTypeNamespace) writeToReader(r io.Reader) error {
 
 // Sends a subscribe message and starts listening for incoming data. This is
 // called when the namespace is created.
-func (i *iexMsgTypeNamespace) connect() error {
+func (i *IEXMsgTypeNamespace) connect() error {
 	r, err := i.encoder.EncodePacket(Message, Connect)
 	if err != nil {
 		return err
@@ -161,7 +161,7 @@ func (i *iexMsgTypeNamespace) connect() error {
 // Given a string representing a JSON IEX message type, parse out the symbol and
 // the message and pass the message to each connection subscribed to the symbol.
 // Use a go routine to prevent from blocking.
-func (i *iexMsgTypeNamespace) fanout(pkt packetMetadata) {
+func (i *IEXMsgTypeNamespace) fanout(pkt packetMetadata) {
 	go func() {
 		// This "symbol only" struct is necessary because this class
 		// is a genny generic. Therefore, even though all IEX messages
@@ -175,7 +175,7 @@ func (i *iexMsgTypeNamespace) fanout(pkt packetMetadata) {
 		}
 		// Now that the symbol has been extraced, the specific message
 		// can be extracted from the data.
-		var decoded iexMsgType
+		var decoded IEXMsgType
 		if err := ParseToJSON(pkt.Data, &decoded); err != nil {
 			glog.Errorf("Could not decode iexMsgType: %s - %v",
 				err, pkt)
@@ -192,15 +192,15 @@ func (i *iexMsgTypeNamespace) fanout(pkt packetMetadata) {
 
 // Returns a connection that will receive messages for the passed in symbols.
 // If no symbols are passed in, they can be added/removed later.
-func (i *iexMsgTypeNamespace) GetConnection(
-	symbols ...string) *iexMsgTypeConnection {
+func (i *IEXMsgTypeNamespace) GetConnection(
+	symbols ...string) *IEXMsgTypeConnection {
 	i.Lock()
 	defer i.Unlock()
 	i.nextId++
 	subUnsubClose := make(chan *IEXMsg, 0)
-	connection := &iexMsgTypeConnection{
+	connection := &IEXMsgTypeConnection{
 		id:                 i.nextId,
-		C:                  make(chan iexMsgType, 1),
+		C:                  make(chan IEXMsgType, 1),
 		subscriptions:      NewPresenceSubscriber(),
 		subUnsubMsgFactory: i.subUnsubMsgFactory,
 		subUnsubClose:      subUnsubClose,
@@ -239,13 +239,13 @@ func (i *iexMsgTypeNamespace) GetConnection(
 	return connection
 }
 
-func newiexMsgTypeNamespace(
+func NewIEXMsgTypeNamespace(
 	ch <-chan packetMetadata, encoder Encoder,
 	writer io.Writer, subUnsubMsgFactory subUnsubMsgFactory,
-	closeFunc func()) *iexMsgTypeNamespace {
-	newNs := &iexMsgTypeNamespace{
+	closeFunc func()) *IEXMsgTypeNamespace {
+	newNs := &IEXMsgTypeNamespace{
 		nextId:             0,
-		connections:        make(map[int]*iexMsgTypeConnection),
+		connections:        make(map[int]*IEXMsgTypeConnection),
 		msgChannel:         ch,
 		encoder:            encoder,
 		writer:             writer,
@@ -256,4 +256,4 @@ func newiexMsgTypeNamespace(
 	return newNs
 }
 
-//go:generate genny -in=$GOFILE -out=gen-$GOFILE gen "iexMsgType=iex.TOPS,iex.Last,iex.DEEP"
+//go:generate genny -in=$GOFILE -out=gen-$GOFILE gen "IEXMsgType=iex.TOPS,iex.Last,iex.DEEP"

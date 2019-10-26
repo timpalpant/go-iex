@@ -75,14 +75,14 @@ func TestNamespace(t *testing.T) {
 		}
 		Convey("send a connect message", func() {
 			writer.listen(1)
-			newIexTOPSNamespace(
+			NewIexTOPSNamespace(
 				ch, encoder, writer, subFactory, closeFunc)
 			waitOnClose(writer.C)
 			So(writer.Messages[0], ShouldEqual, "40/1.0/tops,")
 		})
 		Convey("send no subscription on empty connection", func() {
 			writer.listen(1)
-			ns := newIexTOPSNamespace(
+			ns := NewIexTOPSNamespace(
 				ch, encoder, writer, subFactory, closeFunc)
 			ns.GetConnection()
 			waitOnClose(writer.C)
@@ -90,7 +90,7 @@ func TestNamespace(t *testing.T) {
 		})
 		Convey("send subscription messages", func() {
 			writer.listen(2)
-			ns := newIexTOPSNamespace(
+			ns := NewIexTOPSNamespace(
 				ch, encoder, writer, subFactory, closeFunc)
 			ns.GetConnection("fb", "snap")
 			waitOnClose(writer.C)
@@ -99,7 +99,7 @@ func TestNamespace(t *testing.T) {
 		})
 		Convey("send multiple subscription messages", func() {
 			writer.listen(3)
-			ns := newIexTOPSNamespace(
+			ns := NewIexTOPSNamespace(
 				ch, encoder, writer, subFactory, closeFunc)
 			conn := ns.GetConnection("fb", "snap")
 			conn.Subscribe("goog")
@@ -111,7 +111,7 @@ func TestNamespace(t *testing.T) {
 		})
 		Convey("send unsubscribe messages", func() {
 			writer.listen(3)
-			ns := newIexTOPSNamespace(
+			ns := NewIexTOPSNamespace(
 				ch, encoder, writer, subFactory, closeFunc)
 			conn := ns.GetConnection("fb", "snap")
 			conn.Unsubscribe("goog")
@@ -123,7 +123,7 @@ func TestNamespace(t *testing.T) {
 		})
 		Convey("call closeFunc when all connections closed", func() {
 			writer.listen(1)
-			ns := newIexTOPSNamespace(
+			ns := NewIexTOPSNamespace(
 				ch, encoder, writer, subFactory, closeFunc)
 			waitOnClose(writer.C)
 			conn1 := ns.GetConnection()
@@ -135,7 +135,7 @@ func TestNamespace(t *testing.T) {
 		})
 		Convey("fan out messages", func() {
 			writer.listen(3)
-			ns := newIexTOPSNamespace(
+			ns := NewIexTOPSNamespace(
 				ch, encoder, writer, subFactory, closeFunc)
 			conn1 := ns.GetConnection("fb")
 			conn2 := ns.GetConnection("fb")
@@ -152,7 +152,7 @@ func TestNamespace(t *testing.T) {
 		})
 		Convey("filter based on subscriptions", func() {
 			writer.listen(3)
-			ns := newIexTOPSNamespace(
+			ns := NewIexTOPSNamespace(
 				ch, encoder, writer, subFactory, closeFunc)
 			conn1 := ns.GetConnection("fb")
 			conn2 := ns.GetConnection("goog")
@@ -183,7 +183,7 @@ func TestNamespace(t *testing.T) {
 		})
 		Convey("close outgoing when incoming closed", func() {
 			writer.listen(3)
-			ns := newIexTOPSNamespace(
+			ns := NewIexTOPSNamespace(
 				ch, encoder, writer, subFactory, closeFunc)
 			conn1 := ns.GetConnection("fb")
 			conn2 := ns.GetConnection("goog")
