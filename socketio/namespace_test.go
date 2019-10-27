@@ -1,4 +1,4 @@
-package socketio
+package socketio_test
 
 import (
 	"flag"
@@ -9,6 +9,7 @@ import (
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/timpalpant/go-iex"
+	. "github.com/timpalpant/go-iex/socketio"
 )
 
 func init() {
@@ -67,7 +68,7 @@ func TestNamespace(t *testing.T) {
 			close(closeFuncCalled)
 		}
 		subFactory := func(
-			signal subOrUnsub, symbols []string) *IEXMsg {
+			signal SubOrUnsub, symbols []string) *IEXMsg {
 			return &IEXMsg{
 				EventType: signal,
 				Data:      strings.Join(symbols, ","),

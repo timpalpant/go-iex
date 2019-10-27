@@ -12,21 +12,21 @@ import (
 )
 
 // Signals a subscribe or unsubscribe event.
-type subOrUnsub string
+type SubOrUnsub string
 
 const (
-	Subscribe   subOrUnsub = "subscribe"
-	Unsubscribe subOrUnsub = "unsubscribe"
+	Subscribe   SubOrUnsub = "subscribe"
+	Unsubscribe SubOrUnsub = "unsubscribe"
 )
 
 // A subUnsubMsgFactory takes in a set of string symbols to subscribe or
 // unsubscribe to and returns an IEXMsg suitable for passing to an Encoder. This
 // is used by namespaces to encode subscriptions and unsubscriptions.
-type subUnsubMsgFactory func(signal subOrUnsub, symbols []string) *IEXMsg
+type subUnsubMsgFactory func(signal SubOrUnsub, symbols []string) *IEXMsg
 
 // Returns a subscribe/unsubscribe struct for use by all endpoints except DEEP.
 var simpleSubUnsubFactory = func(
-	signal subOrUnsub, symbols []string) *IEXMsg {
+	signal SubOrUnsub, symbols []string) *IEXMsg {
 	return &IEXMsg{
 		EventType: signal,
 		Data:      strings.Join(symbols, ","),
@@ -37,7 +37,7 @@ var simpleSubUnsubFactory = func(
 // a single symbol at a time can be used. If more than one symbol is passed in
 // only the first one is used.
 var deepSubUnsubFactory = func(
-	signal subOrUnsub, symbols []string) *IEXMsg {
+	signal SubOrUnsub, symbols []string) *IEXMsg {
 	if len(symbols) > 1 {
 		glog.Error("DEEP can only subscribe to one symbol at a time")
 	}
@@ -60,7 +60,7 @@ var deepSubUnsubFactory = func(
 
 type IEXMsg struct {
 	// Contains a string representing subscribe or unsubscribe events.
-	EventType subOrUnsub
+	EventType SubOrUnsub
 	// A string containing data to send. This is specific to a given
 	// endpoint.
 	Data string

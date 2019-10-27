@@ -2,17 +2,12 @@ package socketio_test
 
 import (
 	"encoding/json"
-	"flag"
 	"io/ioutil"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
 	. "github.com/timpalpant/go-iex/socketio"
 )
-
-func init() {
-	flag.Set("v", "5")
-}
 
 func TestWebsocketEncoding(t *testing.T) {
 	Convey("Websocket encoding should", t, func() {

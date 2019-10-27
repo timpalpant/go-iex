@@ -1,56 +1,100 @@
 package socketio_test
 
 import (
-	"net/http"
-	"net/http/httptest"
-	"net/url"
+	"sync"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
 	. "github.com/timpalpant/go-iex/socketio"
 )
 
-type mockHTTPClient struct {
-	body     string
-	headers  map[string]string
-	code     int
-	err      error
-	requests []*url.URL
+type fakeTransport struct {
+	sync.Mutex
+
+	closed bool
+	Writer channelWriter
 }
 
-func (c *mockHTTPClient) Get(to string) (*http.Response, error) {
-	parsed, _ := url.Parse(to)
-	c.requests = append(c.requests, parsed)
-	w := httptest.NewRecorder()
-	w.WriteString(c.body)
+func (f *fakeTransport) Write(data []byte) (int, error) {
+	return f.Writer.Write(data)
+}
 
-	for key, value := range c.headers {
-		w.Header().Add(key, value)
-	}
+func (f *fakeTransport) GetReadChannel() (<-chan PacketData, error) {
+	return make(chan PacketData, 0), nil
+}
 
-	w.WriteHeader(c.code)
-
-	resp := w.Result()
-	return resp, c.err
+func (f *fakeTransport) Close() {
+	f.Lock()
+	defer f.Unlock()
+	f.closed = true
 }
 
 func TestClient(t *testing.T) {
-	Convey("The SocketIO client", t, func() {
-		Convey("should make the initial polling request", func() {
-			mock := &mockHTTPClient{}
-			c := NewSocketioClient(mock, func() string {
-				return "1234"
-			})
-			c.OpenTops()
-			expected, _ := url.Parse("https://ws-api.iextrading.com")
-			expected.Path = "socket.io"
-			values := expected.Query()
-			values.Set("EIO", "3")
-			values.Set("transport", "polling")
-			values.Set("t", "1234")
-			expected.RawQuery = values.Encode()
-			So(mock.requests[0].String(), ShouldEqual,
-				expected.String())
+	Convey("The Client should", t, func() {
+		ft := &fakeTransport{
+			closed: false,
+			Writer: channelWriter{
+				Messages: make([]string, 0),
+				internal: make(chan string, 0),
+				C:        make(chan interface{}, 0),
+			},
+		}
+		Convey("send DEEP connect", func() {
+			ft.Writer.listen(1)
+			client := NewClientWithTransport(ft)
+			client.GetDEEPNamespace()
+			waitOnClose(ft.Writer.C)
+			So(ft.Writer.Messages[0], ShouldEqual, "40/1.0/deep,")
+		})
+		Convey("send Last connect", func() {
+			ft.Writer.listen(1)
+			client := NewClientWithTransport(ft)
+			client.GetLastNamespace()
+			waitOnClose(ft.Writer.C)
+			So(ft.Writer.Messages[0], ShouldEqual, "40/1.0/last,")
+		})
+		Convey("send TOPS connect", func() {
+			ft.Writer.listen(1)
+			client := NewClientWithTransport(ft)
+			client.GetTOPSNamespace()
+			waitOnClose(ft.Writer.C)
+			So(ft.Writer.Messages[0], ShouldEqual, "40/1.0/tops,")
+		})
+		Convey("close DEEP connect", func() {
+			ft.Writer.listen(4)
+			client := NewClientWithTransport(ft)
+			ns := client.GetDEEPNamespace()
+			conn1 := ns.GetConnection("fb")
+			conn2 := ns.GetConnection("goog")
+			conn1.Close()
+			conn2.Close()
+			waitOnClose(ft.Writer.C)
+			So(ft.Writer.Messages[0], ShouldEqual, "40/1.0/deep,")
+			So(ft.Writer.Messages[3], ShouldEqual, "41/1.0/deep,")
+		})
+		Convey("close Last connect", func() {
+			ft.Writer.listen(4)
+			client := NewClientWithTransport(ft)
+			ns := client.GetLastNamespace()
+			conn1 := ns.GetConnection("fb")
+			conn2 := ns.GetConnection("goog")
+			conn1.Close()
+			conn2.Close()
+			waitOnClose(ft.Writer.C)
+			So(ft.Writer.Messages[0], ShouldEqual, "40/1.0/last,")
+			So(ft.Writer.Messages[3], ShouldEqual, "41/1.0/last,")
+		})
+		Convey("close TOPS connect", func() {
+			ft.Writer.listen(4)
+			client := NewClientWithTransport(ft)
+			ns := client.GetTOPSNamespace()
+			conn1 := ns.GetConnection("fb")
+			conn2 := ns.GetConnection("goog")
+			conn1.Close()
+			conn2.Close()
+			waitOnClose(ft.Writer.C)
+			So(ft.Writer.Messages[0], ShouldEqual, "40/1.0/tops,")
+			So(ft.Writer.Messages[3], ShouldEqual, "41/1.0/tops,")
 		})
 	})
 }

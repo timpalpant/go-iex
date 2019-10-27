@@ -63,13 +63,11 @@ func (i *IEXMsgTypeConnection) Subscribe(symbols ...string) error {
 		return errors.New(
 			"Cannot call Subscribe on a closed connection")
 	}
-	go func() {
-		for _, symbol := range symbols {
-			i.subscriptions.Subscribe(symbol)
-		}
-		i.subUnsubClose <- i.subUnsubMsgFactory(
-			Subscribe, symbols)
-	}()
+	for _, symbol := range symbols {
+		i.subscriptions.Subscribe(symbol)
+	}
+	i.subUnsubClose <- i.subUnsubMsgFactory(
+		Subscribe, symbols)
 	return nil
 }
 
@@ -82,13 +80,11 @@ func (i *IEXMsgTypeConnection) Unsubscribe(symbols ...string) error {
 		return errors.New(
 			"Cannot call Unsubscribe on a closed connection")
 	}
-	go func() {
-		for _, symbol := range symbols {
-			i.subscriptions.Unsubscribe(symbol)
-		}
-		i.subUnsubClose <- i.subUnsubMsgFactory(
-			Unsubscribe, symbols)
-	}()
+	for _, symbol := range symbols {
+		i.subscriptions.Unsubscribe(symbol)
+	}
+	i.subUnsubClose <- i.subUnsubMsgFactory(
+		Unsubscribe, symbols)
 	return nil
 }
 
