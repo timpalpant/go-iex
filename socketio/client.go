@@ -3,6 +3,7 @@ package socketio
 import (
 	"io/ioutil"
 	"net/http"
+	"net/http/cookiejar"
 	"sync"
 
 	"github.com/golang/glog"
@@ -130,7 +131,11 @@ func NewClientWithTransport(conn Transport) *Client {
 	}
 	if conn == nil {
 		wrapper := &defaultDialerWrapper{websocket.DefaultDialer}
-		transport, err := NewTransport(&http.Client{}, wrapper)
+		jar, err := cookiejar.New(nil)
+		if err != nil {
+			glog.Fatalf("Error creating cookie jar: %s", err)
+		}
+		transport, err := NewTransport(&http.Client{Jar: jar}, wrapper)
 		if err != nil {
 			glog.Fatalf(
 				"Failed to create default transport: %s",

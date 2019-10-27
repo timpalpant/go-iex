@@ -1,6 +1,7 @@
 package socketio
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -131,22 +132,7 @@ func (t *transport) Close() {
 }
 
 func (t *transport) startReadAndWriteRoutines() {
-	go func(ch <-chan []byte) {
-		for message := range ch {
-			if glog.V(3) {
-				glog.Infof("Writing message: %s", message)
-			}
-			err := t.conn.WriteMessage(
-				websocket.TextMessage, message)
-			if err != nil {
-				glog.Errorf(
-					"Failed to write message %q: %s",
-					message, err)
-			}
-		}
-		t.conn.Close()
-	}(t.incoming)
-	go func() {
+	readRoutine := func() {
 		for {
 			_, message, err := t.conn.ReadMessage()
 			if err != nil {
@@ -181,15 +167,33 @@ func (t *transport) startReadAndWriteRoutines() {
 				ch <- metadata
 			}
 		}
-	}()
+	}
+	go func(ch <-chan []byte) {
+		go readRoutine()
+		for message := range ch {
+			if glog.V(3) {
+				glog.Infof("Writing message: %s", message)
+			}
+			err := t.conn.WriteMessage(
+				websocket.TextMessage, message)
+			if err != nil {
+				glog.Errorf(
+					"Failed to write message %q: %s",
+					message, err)
+			}
+		}
+		t.conn.Close()
+	}(t.incoming)
 }
 
-// Performs an HTTP request and returns the response body. If there is an error
-// the io.ReaderCloser will be nil.
-func makeHTTPRequest(client doClient, method string,
-	to string, body io.Reader) (io.ReadCloser, error) {
-	glog.Infof("Making %s request to: %v", method, to)
-	req, err := http.NewRequest(method, to, body)
+// Performs an HTTP request and returns the body. If there is an error the
+// io.Reader will be nil.
+func makeHTTPRequest(client doClient, to string) (io.Reader, error) {
+	if glog.V(3) {
+		glog.Infof("Making GET request to: %v", to)
+	}
+	req, err := http.NewRequest("GET", to, nil)
+
 	if err != nil {
 		if glog.V(3) {
 			glog.Warningf(
@@ -209,14 +213,22 @@ func makeHTTPRequest(client doClient, method string,
 		return nil, &transportError{fmt.Sprintf(
 			"No response body from %s", to)}
 	}
-	return resp.Body, nil
+	if glog.V(5) {
+		glog.Infof("Response: %v", resp)
+		glog.Infof("Status: %v", resp.Status)
+		glog.Infof("Headers: %v", resp.Header)
+	}
+	defer resp.Body.Close()
+	respBytes, _ := ioutil.ReadAll(resp.Body)
+	respBuffer := bytes.NewBuffer(respBytes)
+	return respBuffer, nil
 }
 
 // Performs the initial GET connection to the SocketIO endpoint. If it it
 // successful, it will set the session id (sid) parameter on the endpoint.
 func connect(endpoint Endpoint, client doClient) (*handshakeResponse, error) {
 	handshakeUrl := endpoint.GetHTTPUrl()
-	resp, err := makeHTTPRequest(client, "GET", handshakeUrl, nil)
+	resp, err := makeHTTPRequest(client, handshakeUrl)
 	if err != nil {
 		glog.Errorf("Error connecting to IEX: %s", err)
 		return nil, err
@@ -232,45 +244,31 @@ func connect(endpoint Endpoint, client doClient) (*handshakeResponse, error) {
 		if val == "websocket" {
 			canUpgradeToWs = true
 		}
-
 	}
 	if !canUpgradeToWs {
 		return nil, &transportError{
 			"Websocket upgrade not found"}
 	}
 	endpoint.SetSid(handshake.Sid)
-	return &handshake, nil
-}
-
-// Joins the default namespace. Returns an error if there was an unexpected
-// server response.
-func joinDefaultNsp(endpoint Endpoint, client doClient) error {
-	encoder := NewHTTPEncoder("/")
-	reader, err := encoder.EncodePacket(4, 0)
+	// Making a get request with the SID automatically joins the default
+	// namespace.
+	resp, err = makeHTTPRequest(client, endpoint.GetHTTPUrl())
 	if err != nil {
-		glog.Errorf("Error encoding namespace connection: %s", err)
-		return err
-	}
-	resp, err := makeHTTPRequest(
-		client, "POST", endpoint.GetHTTPUrl(), reader)
-	if err != nil {
-		glog.Errorf("Error connecting to the empty room: %s", err)
-		return err
+		glog.Errorf("Error making status GET: %s", err)
+		return nil, err
 	}
 	var packetData PacketData
 	err = HTTPToJSON(resp, []interface{}{&packetData})
 	if err != nil {
-		glog.Errorf("Error parsing namespace response: %s", err)
-		return err
+		glog.Errorf("Error parsing handshake response: %s", err)
+		return nil, err
 	}
-	if packetData.PacketType != 4 || packetData.MessageType != 0 {
-		glog.Errorf("Unexpected namespace response: %+v",
+	if packetData.PacketType != Message &&
+		packetData.MessageType != Connect {
+		return nil, fmt.Errorf("Unexpected namespace response: %v",
 			packetData)
-		return &transportError{fmt.Sprintf(
-			"Unexpected namespace response: %+v",
-			packetData)}
 	}
-	return nil
+	return &handshake, nil
 }
 
 func sendPacket(transport Transport, packetType PacketType) {
@@ -337,31 +335,22 @@ func upgrade(endpoint Endpoint, dialer WSDialer, ping int) (Transport, error) {
 	if glog.V(3) {
 		glog.Info("Websocket connection established; sending upgrade")
 	}
-	encoder := NewWSEncoder("")
-	reader, err := encoder.EncodePacket(5, -1)
-	if err != nil {
-		glog.Errorf("Error upgrading connection: %s", err)
-		return nil, err
-	}
 	quitChannel := make(chan int)
 	trans := &transport{
 		conn:          conn,
 		quitHeartbeat: quitChannel,
-		outgoing: &outgoing{channels: make(
-			[]chan PacketData, 0)},
-		incoming: make(chan []byte, 1),
+		outgoing: &outgoing{
+			channels: make(
+				[]chan PacketData, 0),
+		},
+		incoming: make(chan []byte, 0),
 	}
-	data, err := ioutil.ReadAll(reader)
-	if err != nil {
-		glog.Errorf("Error reading upgrade: %s", err)
-	}
-	_, err = trans.Write(data)
-	if err != nil {
-		glog.Errorf("Error upgrading connection: %s", err)
-		return nil, err
-	}
-	startHeartbeat(trans, quitChannel, ping)
+	glog.Infof("CONN: %v", trans.conn)
 	trans.startReadAndWriteRoutines()
+	startHeartbeat(trans, quitChannel, ping)
+
+	// Upgrade the websocket connection.
+	sendPacket(trans, Upgrade)
 
 	return trans, nil
 }
@@ -371,10 +360,6 @@ func upgrade(endpoint Endpoint, dialer WSDialer, ping int) (Transport, error) {
 func NewTransport(client doClient, dialer WSDialer) (Transport, error) {
 	endpoint := NewIEXEndpoint(sid.IdBase64)
 	handshake, err := connect(endpoint, client)
-	if err != nil {
-		return nil, err
-	}
-	err = joinDefaultNsp(endpoint, client)
 	if err != nil {
 		return nil, err
 	}

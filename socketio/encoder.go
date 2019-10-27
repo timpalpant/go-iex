@@ -95,7 +95,7 @@ func (enc *httpEncoder) EncodePacket(
 		return nil, err
 	}
 	if glog.V(3) {
-		glog.Infof("Inner encoding: %s", val)
+		glog.Infof("Encoded packet: %s", val)
 	}
 	parts := []string{fmt.Sprintf("%d", len(val)), string(val)}
 	return strings.NewReader(strings.Join(parts, ":")), nil

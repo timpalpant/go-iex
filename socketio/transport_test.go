@@ -125,7 +125,10 @@ func TestTransport(t *testing.T) {
 			requests := make([]*http.Request, 0)
 			responses := make([]*response, 0)
 			fdc := &fakeDoClient{requests, responses, 0}
-			fw := &fakeWsDialer{}
+			fc := emptyConn()
+			fw := &fakeWsDialer{
+				conn: fc,
+			}
 			_, err := NewTransport(fdc, fw)
 			So(err, ShouldNotBeNil)
 			So(err.Error(), ShouldStartWith, "No response body")
@@ -141,7 +144,10 @@ func TestTransport(t *testing.T) {
 			hsResponse := &response{nil, &fakeError{"No connection"}}
 			responses := []*response{hsResponse}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fw := &fakeWsDialer{}
+			fc := emptyConn()
+			fw := &fakeWsDialer{
+				conn: fc,
+			}
 			_, err := NewTransport(fdc, fw)
 			So(err, ShouldNotBeNil)
 			So(err.Error(), ShouldEqual, "No connection")
@@ -156,7 +162,10 @@ func TestTransport(t *testing.T) {
 				resp: hsResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fw := &fakeWsDialer{}
+			fc := emptyConn()
+			fw := &fakeWsDialer{
+				conn: fc,
+			}
 			_, err := NewTransport(fdc, fw)
 			So(err, ShouldNotBeNil)
 			So(err.Error(), ShouldEqual, "Websocket upgrade not found")
@@ -177,7 +186,10 @@ func TestTransport(t *testing.T) {
 				resp: nspResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fw := &fakeWsDialer{}
+			fc := emptyConn()
+			fw := &fakeWsDialer{
+				conn: fc,
+			}
 			_, err := NewTransport(fdc, fw)
 			So(err, ShouldNotBeNil)
 			So(err.Error(), ShouldStartWith,
@@ -231,7 +243,7 @@ func TestTransport(t *testing.T) {
 			So(err, ShouldBeNil)
 			So(len(fdc.Requests), ShouldEqual, 2)
 			to := fdc.Requests[1].URL
-			So(fdc.Requests[1].Method, ShouldEqual, "POST")
+			So(fdc.Requests[1].Method, ShouldEqual, "GET")
 			So(to.Scheme, ShouldEqual, "https")
 			So(to.Host, ShouldStartWith, "ws-api.iextrading.com")
 			So(to.Path, ShouldEqual, "/socket.io/")
