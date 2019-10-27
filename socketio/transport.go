@@ -345,7 +345,6 @@ func upgrade(endpoint Endpoint, dialer WSDialer, ping int) (Transport, error) {
 		},
 		incoming: make(chan []byte, 0),
 	}
-	glog.Infof("CONN: %v", trans.conn)
 	trans.startReadAndWriteRoutines()
 	startHeartbeat(trans, quitChannel, ping)
 
