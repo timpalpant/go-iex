@@ -107,6 +107,10 @@ func (i *IexTOPSNamespace) fanout(pkt PacketData) {
 				symbol.Symbol)
 		}
 		if _, ok := sub.Symbols[symbol.Symbol]; ok {
+			if glog.V(5) {
+				glog.Infof("Calling subscription to %s",
+					symbol.Symbol)
+			}
 			sub.Callback(decoded)
 		}
 	}
@@ -131,9 +135,9 @@ func (i *IexTOPSNamespace) getCloseSubscriptionFunc(id int) func() {
 		}
 		delete(i.subscriptions, id)
 		i.Unlock()
-		if len(unsub) > 0 {
+		for _, symbol := range unsub {
 			err := i.sendSubUnsub(i.subUnsubMsgFactory(
-				Unsubscribe, unsub))
+				Unsubscribe, []string{symbol}))
 			if err != nil {
 				glog.Errorf("Error unsubscrubing from %v: %s",
 					unsub, err)
@@ -166,12 +170,17 @@ func (i *IexTOPSNamespace) SubscribeTo(
 		Symbols:  make(map[string]struct{}),
 	}
 	if len(symbols) > 0 {
+		var err error
 		for _, symbol := range symbols {
 			symbol = strings.ToUpper(symbol)
 			newSub.Symbols[symbol] = struct{}{}
 			i.symbols.Subscribe(symbol)
+			// Subscribe to each symbol individually. This allows
+			// DEEP, which only allows subscribing to a single
+			// symbol at a time, to use the same path.
+			err = i.sendSubUnsub(i.subUnsubMsgFactory(
+				Subscribe, []string{symbol}))
 		}
-		err := i.sendSubUnsub(i.subUnsubMsgFactory(Subscribe, symbols))
 		if err != nil {
 			return nil, err
 		}
@@ -292,6 +301,10 @@ func (i *IexLastNamespace) fanout(pkt PacketData) {
 				symbol.Symbol)
 		}
 		if _, ok := sub.Symbols[symbol.Symbol]; ok {
+			if glog.V(5) {
+				glog.Infof("Calling subscription to %s",
+					symbol.Symbol)
+			}
 			sub.Callback(decoded)
 		}
 	}
@@ -316,9 +329,9 @@ func (i *IexLastNamespace) getCloseSubscriptionFunc(id int) func() {
 		}
 		delete(i.subscriptions, id)
 		i.Unlock()
-		if len(unsub) > 0 {
+		for _, symbol := range unsub {
 			err := i.sendSubUnsub(i.subUnsubMsgFactory(
-				Unsubscribe, unsub))
+				Unsubscribe, []string{symbol}))
 			if err != nil {
 				glog.Errorf("Error unsubscrubing from %v: %s",
 					unsub, err)
@@ -351,12 +364,17 @@ func (i *IexLastNamespace) SubscribeTo(
 		Symbols:  make(map[string]struct{}),
 	}
 	if len(symbols) > 0 {
+		var err error
 		for _, symbol := range symbols {
 			symbol = strings.ToUpper(symbol)
 			newSub.Symbols[symbol] = struct{}{}
 			i.symbols.Subscribe(symbol)
+			// Subscribe to each symbol individually. This allows
+			// DEEP, which only allows subscribing to a single
+			// symbol at a time, to use the same path.
+			err = i.sendSubUnsub(i.subUnsubMsgFactory(
+				Subscribe, []string{symbol}))
 		}
-		err := i.sendSubUnsub(i.subUnsubMsgFactory(Subscribe, symbols))
 		if err != nil {
 			return nil, err
 		}
@@ -477,6 +495,10 @@ func (i *IexDEEPNamespace) fanout(pkt PacketData) {
 				symbol.Symbol)
 		}
 		if _, ok := sub.Symbols[symbol.Symbol]; ok {
+			if glog.V(5) {
+				glog.Infof("Calling subscription to %s",
+					symbol.Symbol)
+			}
 			sub.Callback(decoded)
 		}
 	}
@@ -501,9 +523,9 @@ func (i *IexDEEPNamespace) getCloseSubscriptionFunc(id int) func() {
 		}
 		delete(i.subscriptions, id)
 		i.Unlock()
-		if len(unsub) > 0 {
+		for _, symbol := range unsub {
 			err := i.sendSubUnsub(i.subUnsubMsgFactory(
-				Unsubscribe, unsub))
+				Unsubscribe, []string{symbol}))
 			if err != nil {
 				glog.Errorf("Error unsubscrubing from %v: %s",
 					unsub, err)
@@ -536,12 +558,17 @@ func (i *IexDEEPNamespace) SubscribeTo(
 		Symbols:  make(map[string]struct{}),
 	}
 	if len(symbols) > 0 {
+		var err error
 		for _, symbol := range symbols {
 			symbol = strings.ToUpper(symbol)
 			newSub.Symbols[symbol] = struct{}{}
 			i.symbols.Subscribe(symbol)
+			// Subscribe to each symbol individually. This allows
+			// DEEP, which only allows subscribing to a single
+			// symbol at a time, to use the same path.
+			err = i.sendSubUnsub(i.subUnsubMsgFactory(
+				Subscribe, []string{symbol}))
 		}
-		err := i.sendSubUnsub(i.subUnsubMsgFactory(Subscribe, symbols))
 		if err != nil {
 			return nil, err
 		}

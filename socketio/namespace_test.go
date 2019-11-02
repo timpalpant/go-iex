@@ -41,9 +41,11 @@ func TestNamespace(t *testing.T) {
 			handler := func(msg iex.TOPS) {}
 			_, err := ns.SubscribeTo(handler, "fb", "snap")
 			So(err, ShouldBeNil)
-			So(ft.messages[0], ShouldEqual, "40/1.0/tops,")
-			So(ft.messages[1], ShouldEqual,
-				`42/1.0/tops,["subscribe","fb,snap"]`)
+			So("40/1.0/tops,", ShouldBeIn, ft.messages)
+			So(`42/1.0/tops,["subscribe","FB"]`, ShouldBeIn,
+				ft.messages)
+			So(`42/1.0/tops,["subscribe","SNAP"]`, ShouldBeIn,
+				ft.messages)
 		})
 		Convey("send unsubscribe messages", func() {
 			ns := NewIexTOPSNamespace(ft, subFactory, closeFunc)
@@ -51,9 +53,13 @@ func TestNamespace(t *testing.T) {
 			closer, err := ns.SubscribeTo(handler, "fb", "snap")
 			So(err, ShouldBeNil)
 			closer()
-			So(`42/1.0/tops,["subscribe","fb,snap"]`,
+			So(`42/1.0/tops,["subscribe","FB"]`,
 				ShouldBeIn, ft.messages)
-			So(`42/1.0/tops,["unsubscribe","fb,snap"]`,
+			So(`42/1.0/tops,["subscribe","SNAP"]`,
+				ShouldBeIn, ft.messages)
+			So(`42/1.0/tops,["unsubscribe","FB"]`,
+				ShouldBeIn, ft.messages)
+			So(`42/1.0/tops,["unsubscribe","SNAP"]`,
 				ShouldBeIn, ft.messages)
 		})
 		Convey("unsubscribe when all references removed", func() {
@@ -63,13 +69,17 @@ func TestNamespace(t *testing.T) {
 			So(err, ShouldBeNil)
 			closer2, err := ns.SubscribeTo(handler, "fb", "goog")
 			So(err, ShouldBeNil)
+			So(`42/1.0/tops,["subscribe","FB"]`,
+				ShouldBeIn, ft.messages)
+			So(`42/1.0/tops,["subscribe","SNAP"]`,
+				ShouldBeIn, ft.messages)
 			closer1()
+			So(`42/1.0/tops,["unsubscribe","SNAP"]`,
+				ShouldBeIn, ft.messages)
 			closer2()
-			So(`42/1.0/tops,["subscribe","fb,snap"]`,
+			So(`42/1.0/tops,["unsubscribe","FB"]`,
 				ShouldBeIn, ft.messages)
-			So(`42/1.0/tops,["unsubscribe","snap"]`,
-				ShouldBeIn, ft.messages)
-			So(`42/1.0/tops,["unsubscribe","fb,goog"]`,
+			So(`42/1.0/tops,["unsubscribe","GOOG"]`,
 				ShouldBeIn, ft.messages)
 		})
 		Convey("call closeFunc when all connections closed", func() {
@@ -99,10 +109,10 @@ func TestNamespace(t *testing.T) {
 			_, err = ns.SubscribeTo(handler2, "fb")
 			So(err, ShouldBeNil)
 			ft.callbacks["/1.0/tops"][1](PacketData{
-				Data: "{\"symbol\":\"fb\",\"bidsize\":12}",
+				Data: "{\"symbol\":\"FB\",\"bidsize\":12}",
 			})
 			expected := iex.TOPS{
-				Symbol:  "fb",
+				Symbol:  "FB",
 				BidSize: 12,
 			}
 			So(msg1, ShouldResemble, expected)
@@ -124,20 +134,20 @@ func TestNamespace(t *testing.T) {
 			So(err, ShouldBeNil)
 			ft.TriggerCallbacks(PacketData{
 				Namespace: "/1.0/tops",
-				Data:      "{\"symbol\":\"fb\",\"bidsize\":12}",
+				Data:      "{\"symbol\":\"FB\",\"bidsize\":12}",
 			})
 			fbExpected := iex.TOPS{
-				Symbol:  "fb",
+				Symbol:  "FB",
 				BidSize: 12,
 			}
 			So(msg1, ShouldResemble, fbExpected)
 			So(msg2, ShouldResemble, iex.TOPS{})
 			ft.TriggerCallbacks(PacketData{
 				Namespace: "/1.0/tops",
-				Data:      "{\"symbol\":\"goog\",\"bidsize\":11}",
+				Data:      "{\"symbol\":\"GOOG\",\"bidsize\":11}",
 			})
 			googExpected := iex.TOPS{
-				Symbol:  "goog",
+				Symbol:  "GOOG",
 				BidSize: 11,
 			}
 			So(msg2, ShouldResemble, googExpected)
@@ -145,7 +155,7 @@ func TestNamespace(t *testing.T) {
 			msg2 = iex.TOPS{}
 			ft.TriggerCallbacks(PacketData{
 				Namespace: "/1.0/tops",
-				Data:      "{\"symbol\":\"aig+\",\"bidsize\":11}",
+				Data:      "{\"symbol\":\"AIG+\",\"bidsize\":11}",
 			})
 			So(msg1, ShouldResemble, iex.TOPS{})
 			So(msg2, ShouldResemble, iex.TOPS{})
