@@ -7,6 +7,7 @@ package socketio
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 
@@ -17,80 +18,10 @@ import (
 // The generic type representing the IEX message parsed by the namespace.
 type IEXMsgType generic.Type
 
-// Contains a channel for receiving namespace specific messages. Only messages
-// for the symbols subscribed to will be passed along.
-//
-// The close method *must* be called before garbage collection.
-type IEXMsgTypeConnection struct {
-	// For closing.
-	sync.Once
-	// Guards the closed value.
-	sync.RWMutex
-
-	// The ID of this endpoint. Used for removing it from the namespace.
-	id int
-	// A channel for passing along namespace specific messages.
-	C chan IEXMsgType
-	// Used to track which symbols this enpoint is subscribed to.
-	subscriptions Subscriber
-	// The factory function used to generate subscribe/unsubscribe messages.
-	subUnsubMsgFactory subUnsubMsgFactory
-	// Sends subscribe/unsubscribe structs to be encoded as JSON. When this
-	// channel is closed, the connection is removed from the namespace.
-	subUnsubClose chan<- *IEXMsg
-	// True when this connection has been closed.
-	closed bool
-}
-
-// Cleans up references to this connection in the Namespace. Messages will no
-// longer be received and the Subscribe/Unsubscribe methods can no longer be
-// called.
-func (i *IEXMsgTypeConnection) Close() {
-	i.Do(func() {
-		i.Lock()
-		defer i.Unlock()
-		i.closed = true
-		close(i.subUnsubClose)
-	})
-}
-
-// Subscribes to the given symbols. An error is returned if the connection is
-// already closed.
-func (i *IEXMsgTypeConnection) Subscribe(symbols ...string) error {
-	i.RLock()
-	defer i.RUnlock()
-	if i.closed {
-		return errors.New(
-			"Cannot call Subscribe on a closed connection")
-	}
-	for _, symbol := range symbols {
-		i.subscriptions.Subscribe(symbol)
-	}
-	i.subUnsubClose <- i.subUnsubMsgFactory(
-		Subscribe, symbols)
-	return nil
-}
-
-// Unsubscribes to the given symbols. An error is returned if the connection is
-// already closed.
-func (i *IEXMsgTypeConnection) Unsubscribe(symbols ...string) error {
-	i.RLock()
-	defer i.RUnlock()
-	if i.closed {
-		return errors.New(
-			"Cannot call Unsubscribe on a closed connection")
-	}
-	for _, symbol := range symbols {
-		i.subscriptions.Unsubscribe(symbol)
-	}
-	i.subUnsubClose <- i.subUnsubMsgFactory(
-		Unsubscribe, symbols)
-	return nil
-}
-
-// Returns true if this connection is subscribed to the given symbol.
-func (i *IEXMsgTypeConnection) Subscribed(symbol string) bool {
-	return i.subscriptions.Subscribed(symbol)
+// Contains callbacks and the symbols they correspond to.
+type subIEXMsgType struct {
+	Callback func(IEXMsgType)
+	Symbols  map[string]struct{}
 }
 
 // Receives messages for a given namespace and forwards them to endpoints.
@@ -98,157 +29,168 @@ type IEXMsgTypeNamespace struct {
 	// Used to guard access to the fanout channels.
 	sync.RWMutex
 
-	// The ID to use for the next endpoint created.
+	// A set of symbols that this namespace is currently subscribed to.
+	// This spans across subcriptions so that unsubscribing from a symbol
+	// only occurs if there are no subscriptions listening for that symbol.
+	symbols Subscriber
+	// The ID to use for the next connection created.
 	nextId int
-	// Active endpoints by ID.
-	connections map[int]*IEXMsgTypeConnection
-	// Receives raw messages from the Transport. Only messages for the
-	// current namespace will be received.
-	msgChannel <-chan PacketData
+	// Active subscriptions by ID.
+	subscriptions map[int]*subIEXMsgType
 	// For encoding outgoing messages in this namespace.
 	encoder Encoder
-	// Used for sending messages to IEX SocketIO.
+	// Used for sending messages to the Transport.
 	writer io.Writer
 	// The factory function used to generate subscribe/unsubscribe messages.
+	// Subscribe and unsubscribe messages can differe by IEX namespace.
 	subUnsubMsgFactory subUnsubMsgFactory
 	// A function to be called when the namespace has no more endpoints.
-	closeFunc func()
+	closeFunc func(string)
 }
 
-func (i *IEXMsgTypeNamespace) writeToReader(r io.Reader) error {
-	var buffer bytes.Buffer
-	if _, err := buffer.ReadFrom(r); err != nil {
-		return err
-	}
-	if glog.V(3) {
-		glog.Infof("Writing '%s' to reader", buffer.String())
-	}
-	if _, err := buffer.WriteTo(i.writer); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Sends a subscribe message and starts listening for incoming data. This is
-// called when the namespace is created.
-func (i *IEXMsgTypeNamespace) connect() error {
-	r, err := i.encoder.EncodePacket(Message, Connect)
+// Sends a subscribe message. This is performed when the number of subscriptions
+// goes from 0 to 1.
+func (i *IEXMsgTypeNamespace) sendPacket(msgType MessageType) error {
+	r, err := i.encoder.EncodePacket(Message, msgType)
 	if err != nil {
 		return err
 	}
-	if err := i.writeToReader(r); err != nil {
-		return err
+	buffer := &bytes.Buffer{}
+	_, err = buffer.ReadFrom(r)
+	_, err = buffer.WriteTo(i.writer)
+	return err
+}
+
+// Encodes and sends a subscribe or unsubscribe message on the transport layer.
+func (i *IEXMsgTypeNamespace) sendSubUnsub(subUnsubMsg *IEXMsg) error {
+	r, err := i.encoder.EncodeMessage(Message, Event, subUnsubMsg)
+	if err != nil {
+		return fmt.Errorf("Error encoding %+v: %s", subUnsubMsg, err)
 	}
-	// Start listening for messages from the Transport layer.
-	go func() {
-		for msg := range i.msgChannel {
-			i.fanout(msg)
-		}
-		// Close all outgoing connections.
-		i.RLock()
-		defer i.RUnlock()
-		for _, connection := range i.connections {
-			close(connection.C)
-		}
-	}()
-	return nil
+	buffer := &bytes.Buffer{}
+	_, err = buffer.ReadFrom(r)
+	_, err = buffer.WriteTo(i.writer)
+	return err
 }
 
 // Given a string representing a JSON IEX message type, parse out the symbol and
-// the message and pass the message to each connection subscribed to the symbol.
-// Use a go routine to prevent from blocking.
+// message and pass the message to each connection subscribed to the symbol.
 func (i *IEXMsgTypeNamespace) fanout(pkt PacketData) {
-	go func() {
-		// This "symbol only" struct is necessary because this class
-		// is a genny generic. Therefore, even though all IEX messages
-		// have a "symbol" field, iexMsgType.symbol is not type safe.
-		var symbol struct {
-			Symbol string
+	// This "symbol only" struct is necessary because this class
+	// is a genny generic. Therefore, even though all IEX messages
+	// have a "symbol" field, iexMsgType.symbol is not type safe.
+	var symbol struct {
+		Symbol string
+	}
+	if err := ParseToJSON(pkt.Data, &symbol); err != nil {
+		glog.Errorf("No symbol found for iexMsgType: %s - %v",
+			err, pkt)
+	}
+	// Now that the symbol has been extraced, the specific message
+	// can be extracted from the data.
+	var decoded IEXMsgType
+	if err := ParseToJSON(pkt.Data, &decoded); err != nil {
+		glog.Errorf("Could not decode iexMsgType: %s - %v",
+			err, pkt)
+	}
+	if glog.V(5) {
+		glog.Infof("Extracted symbol: %v", symbol)
+		glog.Infof("Extracted message: %v", decoded)
+	}
+	i.RLock()
+	defer i.RUnlock()
+	for _, sub := range i.subscriptions {
+		if _, ok := sub.Symbols[(symbol.Symbol)]; ok {
+			sub.Callback(decoded)
 		}
-		if err := ParseToJSON(pkt.Data, &symbol); err != nil {
-			glog.Errorf("No symbol found for iexMsgType: %s - %v",
-				err, pkt)
-		}
-		// Now that the symbol has been extraced, the specific message
-		// can be extracted from the data.
-		var decoded IEXMsgType
-		if err := ParseToJSON(pkt.Data, &decoded); err != nil {
-			glog.Errorf("Could not decode iexMsgType: %s - %v",
-				err, pkt)
-		}
-		i.RLock()
-		defer i.RUnlock()
-		for _, connection := range i.connections {
-			if connection.Subscribed(symbol.Symbol) {
-				connection.C <- decoded
-			}
-		}
-	}()
+	}
 }
 
-// Returns a connection that will receive messages for the passed in symbols.
-// If no symbols are passed in, they can be added/removed later.
-func (i *IEXMsgTypeNamespace) GetConnection(
-	symbols ...string) *IEXMsgTypeConnection {
+// Returns a method that is passed to new Connections, to be called when the
+// connection is being closed.
+func (i *IEXMsgTypeNamespace) getCloseSubscriptionFunc(id int) func() {
+	return func() {
+		i.Lock()
+		unsub := make([]string, 0)
+		sub := i.subscriptions[id]
+		// Unsubscribe from the subscription symbols. For any that are
+		// no longer being listened to by any subscription, send an
+		// unsubscribe event to IEX. If there are no more subscriptions
+		// in the namespace, disconnect from the namespace.
+		for key, _ := range sub.Symbols {
+			i.symbols.Unsubscribe(key)
+			if !i.symbols.Subscribed(key) {
+				unsub = append(unsub, key)
+			}
+		}
+		delete(i.subscriptions, id)
+		i.Unlock()
+		if len(unsub) > 0 {
+			err := i.sendSubUnsub(i.subUnsubMsgFactory(
+				Unsubscribe, unsub))
+			if err != nil {
+				glog.Errorf("Error unsubscrubing from %v: %s",
+					unsub, err)
+			}
+		}
+		if len(i.subscriptions) == 0 {
+			i.closeFunc(msgTypeToNamespace["IEXMsgType"])
+		}
+	}
+}
+
+// Receive messages for the passed in symbols using the passed in callback.
+// Returns a close function that should be called when the client does not wish
+// to receive any further messages. If symbols is empty, an error is returned.
+func (i *IEXMsgTypeNamespace) SubscribeTo(
+	msgReceived func(msg IEXMsgType), symbols ...string) (func(), error) {
+	if len(symbols) == 0 {
+		return nil, errors.New(
+			"Cannot call SubscribeTo with no symbols")
+	}
 	i.Lock()
 	defer i.Unlock()
+	// Connect to the namespace when adding the first subscription.
+	if len(i.subscriptions) == 0 {
+		i.sendPacket(Connect)
+	}
 	i.nextId++
-	subUnsubClose := make(chan *IEXMsg, 0)
-	connection := &IEXMsgTypeConnection{
-		id:                 i.nextId,
-		C:                  make(chan IEXMsgType, 1),
-		subscriptions:      NewPresenceSubscriber(),
-		subUnsubMsgFactory: i.subUnsubMsgFactory,
-		subUnsubClose:      subUnsubClose,
-		closed:             false,
+	newSub := &subIEXMsgType{
+		Callback: msgReceived,
+		Symbols:  make(map[string]struct{}),
 	}
-	// Start listening for close, subscribe and unsubscribe messages on the
-	// new connection.
-	go func(id int) {
-		for subUnsubMsg := range subUnsubClose {
-			r, err := i.encoder.EncodeMsg(
-				Message, Event, subUnsubMsg)
-			if err != nil {
-				glog.Errorf("Error encoding %+v: %s",
-					subUnsubMsg, err)
-				continue
-			}
-			if err := i.writeToReader(r); err != nil {
-				glog.Errorf("Error encoding %+v: %s",
-					subUnsubMsg, err)
-				continue
-			}
-
-		}
-		i.Lock()
-		defer i.Unlock()
-		delete(i.connections, id)
-		if len(i.connections) == 0 {
-			i.closeFunc()
-		}
-
-	}(i.nextId)
-	i.connections[i.nextId] = connection
 	if len(symbols) > 0 {
-		connection.Subscribe(symbols...)
+		for _, symbol := range symbols {
+			newSub.Symbols[symbol] = struct{}{}
+			i.symbols.Subscribe(symbol)
+		}
+		err := i.sendSubUnsub(i.subUnsubMsgFactory(Subscribe, symbols))
+		if err != nil {
+			return nil, err
+		}
 	}
-	return connection
+	i.subscriptions[i.nextId] = newSub
+	return i.getCloseSubscriptionFunc(i.nextId), nil
 }
 
+// Create a new namespace for a specific IEX endpoint. Because the IEX
+// namespaces use different message types for representing the received data,
+// these classes are represented as generics using Genny.
 func NewIEXMsgTypeNamespace(
-	ch <-chan PacketData, encoder Encoder,
-	writer io.Writer, subUnsubMsgFactory subUnsubMsgFactory,
-	closeFunc func()) *IEXMsgTypeNamespace {
+	transport Transport, subUnsubMsgFactory subUnsubMsgFactory,
+	closeFunc func(string)) *IEXMsgTypeNamespace {
+	namespace := msgTypeToNamespace["IEXMsgType"]
+	encoder := NewWSEncoder(namespace)
 	newNs := &IEXMsgTypeNamespace{
+		symbols:            NewCountingSubscriber(),
 		nextId:             0,
-		connections:        make(map[int]*IEXMsgTypeConnection),
-		msgChannel:         ch,
+		subscriptions:      make(map[int]*subIEXMsgType),
 		encoder:            encoder,
-		writer:             writer,
+		writer:             transport,
 		subUnsubMsgFactory: subUnsubMsgFactory,
 		closeFunc:          closeFunc,
 	}
-	newNs.connect()
+	transport.AddPacketCallback(namespace, newNs.fanout)
 	return newNs
 }
 

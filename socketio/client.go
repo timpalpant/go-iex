@@ -34,38 +34,36 @@ type Client struct {
 	topsNamespace *IexTOPSNamespace
 }
 
-func (c *Client) getCloseNamespace(ns string) func() {
-	return func() {
-		c.Lock()
-		defer c.Unlock()
-		c.Unsubscribe(ns)
-		if !c.Subscribed(ns) {
-			enc := NewWSEncoder(ns)
-			r, err := enc.EncodePacket(Message, Disconnect)
-			if err != nil {
-				glog.Errorf(
-					"Error disconnecting from %s: %s",
-					ns, err)
-			}
-			msg, err := ioutil.ReadAll(r)
-			if err != nil {
-				glog.Errorf(
-					"Error disconnecting from %s: %s",
-					ns, err)
-			}
-			if _, err = c.transport.Write(msg); err != nil {
-				glog.Errorf(
-					"Error disconnecting from %s: %s",
-					ns, err)
-			}
-			switch ns {
-			case deep:
-				c.deepNamespace = nil
-			case last:
-				c.lastNamespace = nil
-			case tops:
-				c.topsNamespace = nil
-			}
+func (c *Client) closeNamespace(ns string) {
+	c.Lock()
+	defer c.Unlock()
+	c.Unsubscribe(ns)
+	if !c.Subscribed(ns) {
+		enc := NewWSEncoder(ns)
+		r, err := enc.EncodePacket(Message, Disconnect)
+		if err != nil {
+			glog.Errorf(
+				"Error disconnecting from %s: %s",
+				ns, err)
+		}
+		msg, err := ioutil.ReadAll(r)
+		if err != nil {
+			glog.Errorf(
+				"Error disconnecting from %s: %s",
+				ns, err)
+		}
+		if _, err = c.transport.Write(msg); err != nil {
+			glog.Errorf(
+				"Error disconnecting from %s: %s",
+				ns, err)
+		}
+		switch ns {
+		case deep:
+			c.deepNamespace = nil
+		case last:
+			c.lastNamespace = nil
+		case tops:
+			c.topsNamespace = nil
 		}
 	}
 }
@@ -74,13 +72,8 @@ func (c *Client) GetDEEPNamespace() *IexDEEPNamespace {
 	if c.deepNamespace != nil {
 		return c.deepNamespace
 	}
-	readChan, err := c.transport.GetReadChannel()
-	if err != nil {
-		glog.Fatalf("Failed to get DEEP namespace: %s", err)
-	}
 	c.deepNamespace = NewIexDEEPNamespace(
-		readChan, NewWSEncoder(deep),
-		c.transport, deepSubUnsubFactory, c.getCloseNamespace(deep))
+		c.transport, deepSubUnsubFactory, c.closeNamespace)
 	return c.deepNamespace
 }
 
@@ -88,13 +81,8 @@ func (c *Client) GetLastNamespace() *IexLastNamespace {
 	if c.lastNamespace != nil {
 		return c.lastNamespace
 	}
-	readChan, err := c.transport.GetReadChannel()
-	if err != nil {
-		glog.Fatalf("Failed to get DEEP namespace: %s", err)
-	}
 	c.lastNamespace = NewIexLastNamespace(
-		readChan, NewWSEncoder(last),
-		c.transport, simpleSubUnsubFactory, c.getCloseNamespace(last))
+		c.transport, simpleSubUnsubFactory, c.closeNamespace)
 	return c.lastNamespace
 }
 
@@ -102,13 +90,8 @@ func (c *Client) GetTOPSNamespace() *IexTOPSNamespace {
 	if c.topsNamespace != nil {
 		return c.topsNamespace
 	}
-	readChan, err := c.transport.GetReadChannel()
-	if err != nil {
-		glog.Fatalf("Failed to get DEEP namespace: %s", err)
-	}
 	c.topsNamespace = NewIexTOPSNamespace(
-		readChan, NewWSEncoder(tops),
-		c.transport, deepSubUnsubFactory, c.getCloseNamespace(tops))
+		c.transport, simpleSubUnsubFactory, c.closeNamespace)
 	return c.topsNamespace
 }
 

@@ -11,6 +11,12 @@ import (
 	"github.com/golang/glog"
 )
 
+var msgTypeToNamespace = map[string]string{
+	"IexDEEP": "/1.0/deep",
+	"IexLast": "/1.0/last",
+	"IexTOPS": "/1.0/tops",
+}
+
 // Signals a subscribe or unsubscribe event.
 type SubOrUnsub string
 
@@ -73,7 +79,8 @@ type Encoder interface {
 	// Encodes only a namespace and packet and message types.
 	EncodePacket(p PacketType, m MessageType) (io.Reader, error)
 	// Encodes a namespace, packet and message type and data.
-	EncodeMsg(p PacketType, m MessageType, msg *IEXMsg) (io.Reader, error)
+	EncodeMessage(p PacketType, m MessageType, msg *IEXMsg) (
+		io.Reader, error)
 }
 
 // Wraps a strArrayEncoder and returns its contents prepended by <length>:.
@@ -101,9 +108,9 @@ func (enc *httpEncoder) EncodePacket(
 	return strings.NewReader(strings.Join(parts, ":")), nil
 }
 
-func (enc *httpEncoder) EncodeMsg(
+func (enc *httpEncoder) EncodeMessage(
 	p PacketType, m MessageType, msg *IEXMsg) (io.Reader, error) {
-	inner, err := enc.content.EncodeMsg(p, m, msg)
+	inner, err := enc.content.EncodeMessage(p, m, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +163,7 @@ func (enc *strArrayEncoder) EncodePacket(
 // Encodes a message, msg, of the given PacketType and MessageType. The
 // resulting format is:
 // <PacketType><MessageType><Namespace>,[msg.Event, msg.Data]
-func (enc *strArrayEncoder) EncodeMsg(
+func (enc *strArrayEncoder) EncodeMessage(
 	p PacketType, m MessageType, msg *IEXMsg) (io.Reader, error) {
 	reader, err := enc.EncodePacket(p, m)
 	if err != nil {

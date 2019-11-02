@@ -41,11 +41,6 @@ type WSDialer interface {
 		WSConn, *http.Response, error)
 }
 
-// Used to control the heartbeat functionality.
-const (
-	stopBeating = iota
-)
-
 // Indicates an error during initialization of the Transport layer.
 type transportError struct {
 	message string
@@ -61,129 +56,216 @@ type Transport interface {
 	// Provides a thread-safe io.Writer Write method.
 	io.Writer
 
-	// Returns a pointer to a read channel. A new channel is returned with
-	// each call, and all channels will receive a copy of all incoming
-	// messages.
-	GetReadChannel() (<-chan PacketData, error)
+	// Adds a callback to be triggered when packets from the given
+	// namespace are received. Returns a unique ID that can be used
+	// to remove the callback later. If an error occurs, returns -1
+	// and the error.
+	AddPacketCallback(
+		namespace string, callback func(PacketData)) (int, error)
 
-	// Closes the underlying Websocket connection.
+	// Removes a callback using the ID that was returned when the
+	// callback was added. If either the namespace or the ID is does
+	// not exist, this method is a no-op.
+	RemovePacketCallback(namespace string, id int) error
+
+	// Closes the underlying websocket connection.
 	Close()
 }
 
-// A set of channels used to convey incoming messages to listeners.
+// A set of callbacks used to convey incoming messages to listeners.
 type outgoing struct {
 	sync.RWMutex
+
+	// The next ID to use when adding a callback.
+	nextId int
 	// A collection of channels for transmitting messages to consumers.
-	channels []chan PacketData
+	callbacks map[int]func(PacketData)
+}
+
+func newOutgoing() *outgoing {
+	return &outgoing{
+		nextId:    0,
+		callbacks: make(map[int]func(PacketData)),
+	}
+}
+
+// Adds a PacketData callback and returns an identifier to be used when later
+// removing the callback.
+func (o *outgoing) AddCallback(callback func(PacketData)) int {
+	o.Lock()
+	defer o.Unlock()
+	o.nextId++
+	o.callbacks[o.nextId] = callback
+	return o.nextId
+}
+
+// Deletes the callback associated with the given ID. This function is a no-op
+// if the ID is non-existent.
+func (o *outgoing) RemoveCallback(id int) {
+	o.Lock()
+	defer o.Unlock()
+	delete(o.callbacks, id)
+}
+
+func (o *outgoing) Callbacks() map[int]func(PacketData) {
+	o.Lock()
+	defer o.Unlock()
+	// Make a copy for thread safety.
+	copy := make(map[int]func(PacketData))
+	for key, val := range o.callbacks {
+		copy[key] = val
+	}
+	return copy
 }
 
 type transport struct {
 	sync.RWMutex
 	sync.Once
+
 	// The wrapped Gorilla websocket.Conn.
 	conn WSConn
-	// A channel used to kill an ongoing heartbeat.
-	quitHeartbeat chan<- int
-	// A collection of outgoing channels returned by GetReadChannel.
-	outgoing *outgoing
-	// Used to buffer incoming message for writing.
-	incoming chan []byte
+	// A collection of callbacks keyed by namespace names.
+	outgoing map[string]*outgoing
 	// True when this transport has been closed.
 	closed bool
 }
 
-func (t *transport) Write(p []byte) (int, error) {
+func (t *transport) Write(message []byte) (int, error) {
 	t.RLock()
-	defer t.RUnlock()
-	if t.closed {
+	closed := t.closed
+	t.RUnlock()
+	if closed {
 		return 0, &transportError{"Cannot write to a closed transport"}
 	}
-	t.incoming <- p
-	return len(p), nil
+	if glog.V(3) {
+		glog.Infof("Writing message: %s", string(message))
+	}
+	err := t.conn.WriteMessage(
+		websocket.TextMessage, message)
+	if err != nil {
+		glog.Errorf(
+			"Failed to write message %q: %s",
+			string(message), err)
+	}
+	return len(message), nil
 }
 
-func (t *transport) GetReadChannel() (<-chan PacketData, error) {
-	t.outgoing.RLock()
-	defer t.outgoing.RUnlock()
-	if t.closed {
-		return nil, &transportError{
-			"Cannot read from a closed transport"}
+func (t *transport) AddPacketCallback(
+	namespace string, callback func(PacketData)) (int, error) {
+	t.Lock()
+	closed := t.closed
+	t.Unlock()
+	if closed {
+		return -1, &transportError{
+			"Cannot add a callback to a closed transport"}
 	}
-	t.outgoing.channels = append(
-		t.outgoing.channels, make(chan PacketData, 1))
-	return t.outgoing.channels[len(t.outgoing.channels)-1], nil
+	t.Lock()
+	defer t.Unlock()
+	if _, ok := t.outgoing[namespace]; !ok {
+		t.outgoing[namespace] = newOutgoing()
+	}
+	return t.outgoing[namespace].AddCallback(callback), nil
+}
+
+func (t *transport) RemovePacketCallback(namespace string, id int) error {
+	t.Lock()
+	closed := t.closed
+	t.Unlock()
+	if closed {
+		return &transportError{
+			"Cannot remove a callback from a closed transport"}
+	}
+	t.Lock()
+	defer t.Unlock()
+	if val, ok := t.outgoing[namespace]; ok {
+		val.RemoveCallback(id)
+		if len(val.Callbacks()) == 0 {
+			delete(t.outgoing, namespace)
+		}
+	}
+	return nil
 }
 
 func (t *transport) Close() {
 	t.Do(func() {
 		// Send the close signal before marking the transport as closed.
 		sendPacket(t, Close)
-
-		t.quitHeartbeat <- stopBeating
-		for _, ch := range t.outgoing.channels {
-			close(ch)
-		}
-		close(t.incoming)
-
+		t.conn.Close()
 		t.Lock()
 		t.closed = true
 		t.Unlock()
 	})
 }
 
-func (t *transport) startReadAndWriteRoutines() {
-	readRoutine := func() {
-		for {
-			_, message, err := t.conn.ReadMessage()
-			if err != nil {
-				glog.Errorf(
-					"Error reading from websocket: %s",
-					err)
-				return
-			}
-			if len(message) == 0 {
-				continue
-			}
+func (t *transport) startReadLoop() {
+	for {
+		_, message, err := t.conn.ReadMessage()
+		if err != nil {
+			glog.Errorf(
+				"Error reading from websocket: %s",
+				err)
+			return
+		}
+		if len(message) == 0 {
+			continue
+		}
+		if glog.V(3) {
+			glog.Infof(
+				"Received websocket message: %s",
+				message)
+		}
+		t.RLock()
+		closed := t.closed
+		t.RUnlock()
+		if closed {
 			if glog.V(3) {
-				glog.Infof(
-					"Received websocket message: %s",
-					message)
+				errTxt := "Dropping message %s;" +
+					"Transport closed"
+				glog.Warningf(errTxt, message)
 			}
-			t.RLock()
-			if t.closed {
-				if glog.V(3) {
-					errTxt := "Dropping message %s;" +
-						"Transport closed"
-					glog.Warningf(errTxt, message)
-				}
-				t.RUnlock()
-				break
-			}
-			t.RUnlock()
-			var metadata PacketData
-			remaining := ParseMetadata(string(message), &metadata)
-			metadata.Data = remaining
-			for _, ch := range t.outgoing.channels {
-				ch <- metadata
+			break
+		}
+		var metadata PacketData
+		remaining := ParseMetadata(string(message), &metadata)
+		metadata.Data = remaining
+		if val, ok := t.outgoing[metadata.Namespace]; ok {
+			callbacks := val.Callbacks()
+			for _, callback := range callbacks {
+				go callback(metadata)
 			}
 		}
 	}
-	go func(ch <-chan []byte) {
-		go readRoutine()
-		for message := range ch {
-			if glog.V(3) {
-				glog.Infof("Writing message: %s", message)
-			}
-			err := t.conn.WriteMessage(
-				websocket.TextMessage, message)
-			if err != nil {
-				glog.Errorf(
-					"Failed to write message %q: %s",
-					message, err)
+
+}
+
+// Starts a go routine that sends a ping message on the given Transport every
+// "ping" milliseconds.
+func (t *transport) startHeartbeat(pingMillis int) {
+	duration, err := time.ParseDuration(strconv.Itoa(pingMillis) + "ms")
+	if err != nil {
+		glog.Fatalf("Could not start heartbeat: %s", err)
+	}
+	heartbeat := time.NewTicker(duration)
+	go func() {
+		for {
+			select {
+			case time := <-heartbeat.C:
+				t.RLock()
+				closed := t.closed
+				t.RUnlock()
+				if closed {
+					if glog.V(5) {
+						glog.Info("Stop heart beat")
+					}
+					return
+				}
+				if glog.V(3) {
+					glog.Infof("Heartbeating at %v", time)
+				}
+				sendPacket(t, Ping)
 			}
 		}
-		t.conn.Close()
-	}(t.incoming)
+	}()
 }
 
 // Performs an HTTP request and returns the body. If there is an error the
@@ -294,30 +376,6 @@ func sendPacket(transport Transport, packetType PacketType) {
 	}
 }
 
-// Starts a go routine that sends a ping message on the given Transport every
-// "ping" milliseconds.
-func startHeartbeat(
-	transport Transport, quitChan <-chan int, pingMillis int) {
-	duration, err := time.ParseDuration(strconv.Itoa(pingMillis) + "ms")
-	if err != nil {
-		glog.Fatalf("Could not start heartbeat: %s", err)
-	}
-	heartbeat := time.NewTicker(duration)
-	go func() {
-		for {
-			select {
-			case <-quitChan:
-				heartbeat.Stop()
-			case t := <-heartbeat.C:
-				if glog.V(3) {
-					glog.Infof("Heartbeating at %v", t)
-				}
-				sendPacket(transport, Ping)
-			}
-		}
-	}()
-}
-
 // Upgrades from an HTTPS to a Websocket connection. This method starts
 // regular probe polling and sends an upgrade message before returning
 // the websocket.Conn object. If an error occurs, the returned Transport
@@ -335,18 +393,12 @@ func upgrade(endpoint Endpoint, dialer WSDialer, ping int) (Transport, error) {
 	if glog.V(3) {
 		glog.Info("Websocket connection established; sending upgrade")
 	}
-	quitChannel := make(chan int)
 	trans := &transport{
-		conn:          conn,
-		quitHeartbeat: quitChannel,
-		outgoing: &outgoing{
-			channels: make(
-				[]chan PacketData, 0),
-		},
-		incoming: make(chan []byte, 0),
+		conn:     conn,
+		outgoing: make(map[string]*outgoing),
 	}
-	trans.startReadAndWriteRoutines()
-	startHeartbeat(trans, quitChannel, ping)
+	go trans.startReadLoop()
+	trans.startHeartbeat(ping)
 
 	// Upgrade the websocket connection.
 	sendPacket(trans, Upgrade)

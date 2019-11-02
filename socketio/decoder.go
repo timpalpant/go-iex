@@ -79,6 +79,9 @@ func splitOnLength(input string) (string, string) {
 // number.
 func maybeProcessFirstChar(
 	name string, data string, v interface{}) bool {
+	if len(data) == 0 {
+		return false
+	}
 	firstChar := data[0]
 	number, err := strconv.Atoi(string(firstChar))
 	if err != nil {
@@ -151,6 +154,9 @@ func (n *NotJsonError) Error() string {
 // passed in type v does not have PacketType, MessageType or Namespace fields,
 // then no changes are made and the original data is returned.
 func ParseMetadata(data string, v interface{}) string {
+	if len(data) == 0 {
+		return ""
+	}
 	minusTypes := data
 	if maybeProcessFirstChar("PacketType", minusTypes, v) {
 		minusTypes = minusTypes[1:]
@@ -197,17 +203,13 @@ func ParseToJSON(data string, v interface{}) error {
 	if glog.V(3) {
 		glog.Infof("Parsed as JSON array: %s", string(jsonArray[1]))
 	}
-	jsonPart := jsonArray[1]
-	err = json.Unmarshal(jsonPart, v)
+	jsonPart, err := strconv.Unquote(string(jsonArray[1]))
+	err = json.Unmarshal([]byte(jsonPart), v)
 	if err != nil {
 		if glog.V(3) {
 			glog.Errorf("Could not unmarshal data: %s", err)
 		}
-		jsonPart, err := strconv.Unquote(string(jsonPart))
-		if err != nil {
-			glog.Error("Could not unescape JSON string")
-		}
-		return json.Unmarshal([]byte(jsonPart), v)
+		return err
 	}
 	return nil
 }

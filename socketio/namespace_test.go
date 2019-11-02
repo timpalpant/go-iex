@@ -1,10 +1,7 @@
 package socketio_test
 
 import (
-	"flag"
-	"io"
 	"strings"
-	"sync"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
@@ -12,61 +9,9 @@ import (
 	. "github.com/timpalpant/go-iex/socketio"
 )
 
-func init() {
-	flag.Set("v", "5")
-}
-
-type channelWriter struct {
-	sync.RWMutex
-	io.Writer
-
-	Messages []string
-	internal chan string
-	C        chan interface{}
-}
-
-func (c *channelWriter) Write(data []byte) (int, error) {
-	c.internal <- string(data)
-	return len(data), nil
-}
-
-func (c *channelWriter) listen(closeAfter int) {
-	go func(closeAfter int) {
-		for msg := range c.internal {
-			c.Lock()
-			c.Messages = append(c.Messages, msg)
-			if len(c.Messages) >= closeAfter {
-				c.Unlock()
-				close(c.C)
-				return
-			}
-			c.Unlock()
-		}
-	}(closeAfter)
-}
-
-func waitOnClose(c chan interface{}) {
-	for {
-		_, open := <-c
-		if !open {
-			return
-		}
-	}
-}
-
 func TestNamespace(t *testing.T) {
 	Convey("The IexTOPSNamespace should", t, func() {
-		ch := make(chan PacketData, 1)
-		encoder := NewWSEncoder("/1.0/tops")
-		writer := &channelWriter{
-			Messages: make([]string, 0),
-			internal: make(chan string, 0),
-			C:        make(chan interface{}, 0),
-		}
-		closeFuncCalled := make(chan interface{})
-		closeFunc := func() {
-			close(closeFuncCalled)
-		}
+		ft := newFakeTransport()
 		subFactory := func(
 			signal SubOrUnsub, symbols []string) *IEXMsg {
 			return &IEXMsg{
@@ -74,126 +19,136 @@ func TestNamespace(t *testing.T) {
 				Data:      strings.Join(symbols, ","),
 			}
 		}
-		Convey("send a connect message", func() {
-			writer.listen(1)
-			NewIexTOPSNamespace(
-				ch, encoder, writer, subFactory, closeFunc)
-			waitOnClose(writer.C)
-			So(writer.Messages[0], ShouldEqual, "40/1.0/tops,")
+		closed := false
+		closedNamespace := ""
+		closeFunc := func(namespace string) {
+			closedNamespace = namespace
+			closed = true
+		}
+		Convey("not send a connect on creation", func() {
+			NewIexTOPSNamespace(ft, subFactory, closeFunc)
+			So(ft.messages, ShouldHaveLength, 0)
 		})
-		Convey("send no subscription on empty connection", func() {
-			writer.listen(1)
-			ns := NewIexTOPSNamespace(
-				ch, encoder, writer, subFactory, closeFunc)
-			ns.GetConnection()
-			waitOnClose(writer.C)
-			So(writer.Messages[0], ShouldEqual, "40/1.0/tops,")
+		Convey("error on SubscribeTo with no symbols", func() {
+			ns := NewIexTOPSNamespace(ft, subFactory, closeFunc)
+			handler := func(msg iex.TOPS) {}
+			_, err := ns.SubscribeTo(handler)
+			So(err, ShouldNotBeNil)
+			So(err.Error(), ShouldContainSubstring, "no symbols")
 		})
-		Convey("send subscription messages", func() {
-			writer.listen(2)
-			ns := NewIexTOPSNamespace(
-				ch, encoder, writer, subFactory, closeFunc)
-			ns.GetConnection("fb", "snap")
-			waitOnClose(writer.C)
-			So(writer.Messages[1], ShouldEqual,
+		Convey("send a connect message on first subscription", func() {
+			ns := NewIexTOPSNamespace(ft, subFactory, closeFunc)
+			handler := func(msg iex.TOPS) {}
+			_, err := ns.SubscribeTo(handler, "fb", "snap")
+			So(err, ShouldBeNil)
+			So(ft.messages[0], ShouldEqual, "40/1.0/tops,")
+			So(ft.messages[1], ShouldEqual,
 				`42/1.0/tops,["subscribe","fb,snap"]`)
 		})
-		Convey("send multiple subscription messages", func() {
-			writer.listen(3)
-			ns := NewIexTOPSNamespace(
-				ch, encoder, writer, subFactory, closeFunc)
-			conn := ns.GetConnection("fb", "snap")
-			conn.Subscribe("goog")
-			waitOnClose(writer.C)
-			So(`42/1.0/tops,["subscribe","fb,snap"]`,
-				ShouldBeIn, writer.Messages)
-			So(`42/1.0/tops,["subscribe","goog"]`,
-				ShouldBeIn, writer.Messages)
-		})
 		Convey("send unsubscribe messages", func() {
-			writer.listen(3)
-			ns := NewIexTOPSNamespace(
-				ch, encoder, writer, subFactory, closeFunc)
-			conn := ns.GetConnection("fb", "snap")
-			conn.Unsubscribe("goog")
-			waitOnClose(writer.C)
+			ns := NewIexTOPSNamespace(ft, subFactory, closeFunc)
+			handler := func(msg iex.TOPS) {}
+			closer, err := ns.SubscribeTo(handler, "fb", "snap")
+			So(err, ShouldBeNil)
+			closer()
 			So(`42/1.0/tops,["subscribe","fb,snap"]`,
-				ShouldBeIn, writer.Messages)
-			So(`42/1.0/tops,["unsubscribe","goog"]`,
-				ShouldBeIn, writer.Messages)
+				ShouldBeIn, ft.messages)
+			So(`42/1.0/tops,["unsubscribe","fb,snap"]`,
+				ShouldBeIn, ft.messages)
+		})
+		Convey("unsubscribe when all references removed", func() {
+			ns := NewIexTOPSNamespace(ft, subFactory, closeFunc)
+			handler := func(msg iex.TOPS) {}
+			closer1, err := ns.SubscribeTo(handler, "fb", "snap")
+			So(err, ShouldBeNil)
+			closer2, err := ns.SubscribeTo(handler, "fb", "goog")
+			So(err, ShouldBeNil)
+			closer1()
+			closer2()
+			So(`42/1.0/tops,["subscribe","fb,snap"]`,
+				ShouldBeIn, ft.messages)
+			So(`42/1.0/tops,["unsubscribe","snap"]`,
+				ShouldBeIn, ft.messages)
+			So(`42/1.0/tops,["unsubscribe","fb,goog"]`,
+				ShouldBeIn, ft.messages)
 		})
 		Convey("call closeFunc when all connections closed", func() {
-			writer.listen(1)
-			ns := NewIexTOPSNamespace(
-				ch, encoder, writer, subFactory, closeFunc)
-			waitOnClose(writer.C)
-			conn1 := ns.GetConnection()
-			conn2 := ns.GetConnection()
-			conn1.Close()
-			conn2.Close()
-			_, ok := <-closeFuncCalled
-			So(ok, ShouldBeFalse)
+			ns := NewIexTOPSNamespace(ft, subFactory, closeFunc)
+			handler := func(msg iex.TOPS) {}
+			closer1, err := ns.SubscribeTo(handler, "fb")
+			So(err, ShouldBeNil)
+			closer2, err := ns.SubscribeTo(handler, "fb")
+			So(err, ShouldBeNil)
+			closer1()
+			closer2()
+			So(closedNamespace, ShouldEqual, "/1.0/tops")
+			So(closed, ShouldBeTrue)
 		})
 		Convey("fan out messages", func() {
-			writer.listen(3)
-			ns := NewIexTOPSNamespace(
-				ch, encoder, writer, subFactory, closeFunc)
-			conn1 := ns.GetConnection("fb")
-			conn2 := ns.GetConnection("fb")
-			waitOnClose(writer.C)
-			ch <- PacketData{
-				Data: "{\"symbol\":\"fb\",\"bidsize\":12}",
+			ns := NewIexTOPSNamespace(ft, subFactory, closeFunc)
+			var msg1 iex.TOPS
+			handler1 := func(msg iex.TOPS) {
+				msg1 = msg
 			}
+			_, err := ns.SubscribeTo(handler1, "fb")
+			So(err, ShouldBeNil)
+			var msg2 iex.TOPS
+			handler2 := func(msg iex.TOPS) {
+				msg2 = msg
+			}
+			_, err = ns.SubscribeTo(handler2, "fb")
+			So(err, ShouldBeNil)
+			ft.callbacks["/1.0/tops"][1](PacketData{
+				Data: "{\"symbol\":\"fb\",\"bidsize\":12}",
+			})
 			expected := iex.TOPS{
 				Symbol:  "fb",
 				BidSize: 12,
 			}
-			So(<-conn1.C, ShouldResemble, expected)
-			So(<-conn2.C, ShouldResemble, expected)
+			So(msg1, ShouldResemble, expected)
+			So(msg2, ShouldResemble, expected)
 		})
 		Convey("filter based on subscriptions", func() {
-			writer.listen(3)
-			ns := NewIexTOPSNamespace(
-				ch, encoder, writer, subFactory, closeFunc)
-			conn1 := ns.GetConnection("fb")
-			conn2 := ns.GetConnection("goog")
-			waitOnClose(writer.C)
-			ch <- PacketData{
-				Data: "{\"symbol\":\"fb\",\"bidsize\":12}",
+			ns := NewIexTOPSNamespace(ft, subFactory, closeFunc)
+			var msg1 iex.TOPS
+			handler1 := func(msg iex.TOPS) {
+				msg1 = msg
 			}
+			_, err := ns.SubscribeTo(handler1, "fb")
+			So(err, ShouldBeNil)
+			var msg2 iex.TOPS
+			handler2 := func(msg iex.TOPS) {
+				msg2 = msg
+			}
+			_, err = ns.SubscribeTo(handler2, "goog")
+			So(err, ShouldBeNil)
+			ft.TriggerCallbacks(PacketData{
+				Namespace: "/1.0/tops",
+				Data:      "{\"symbol\":\"fb\",\"bidsize\":12}",
+			})
 			fbExpected := iex.TOPS{
 				Symbol:  "fb",
 				BidSize: 12,
 			}
-			So(<-conn1.C, ShouldResemble, fbExpected)
-			So(len(conn2.C), ShouldEqual, 0)
-			ch <- PacketData{
-				Data: "{\"symbol\":\"goog\",\"bidsize\":11}",
-			}
+			So(msg1, ShouldResemble, fbExpected)
+			So(msg2, ShouldResemble, iex.TOPS{})
+			ft.TriggerCallbacks(PacketData{
+				Namespace: "/1.0/tops",
+				Data:      "{\"symbol\":\"goog\",\"bidsize\":11}",
+			})
 			googExpected := iex.TOPS{
 				Symbol:  "goog",
 				BidSize: 11,
 			}
-			So(len(conn1.C), ShouldEqual, 0)
-			So(<-conn2.C, ShouldResemble, googExpected)
-			ch <- PacketData{
-				Data: "{\"symbol\":\"aig+\",\"bidsize\":11}",
-			}
-			So(len(conn1.C), ShouldEqual, 0)
-			So(len(conn2.C), ShouldEqual, 0)
-		})
-		Convey("close outgoing when incoming closed", func() {
-			writer.listen(3)
-			ns := NewIexTOPSNamespace(
-				ch, encoder, writer, subFactory, closeFunc)
-			conn1 := ns.GetConnection("fb")
-			conn2 := ns.GetConnection("goog")
-			waitOnClose(writer.C)
-			close(ch)
-			_, ok := <-conn1.C
-			So(ok, ShouldBeFalse)
-			_, ok = <-conn2.C
-			So(ok, ShouldBeFalse)
+			So(msg2, ShouldResemble, googExpected)
+			msg1 = iex.TOPS{}
+			msg2 = iex.TOPS{}
+			ft.TriggerCallbacks(PacketData{
+				Namespace: "/1.0/tops",
+				Data:      "{\"symbol\":\"aig+\",\"bidsize\":11}",
+			})
+			So(msg1, ShouldResemble, iex.TOPS{})
+			So(msg2, ShouldResemble, iex.TOPS{})
 		})
 	})
 }

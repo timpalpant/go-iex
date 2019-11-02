@@ -49,7 +49,7 @@ func TestWebsocketEncoding(t *testing.T) {
 				EventType: Subscribe,
 				Data:      string(encoding),
 			}
-			encoded, err := encoder.EncodeMsg(-1, -1, iexMsg)
+			encoded, err := encoder.EncodeMessage(-1, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -62,7 +62,7 @@ func TestWebsocketEncoding(t *testing.T) {
 				EventType: Subscribe,
 				Data:      "foo",
 			}
-			encoded, err := encoder.EncodeMsg(-1, -1, iexMsg)
+			encoded, err := encoder.EncodeMessage(-1, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -74,7 +74,7 @@ func TestWebsocketEncoding(t *testing.T) {
 				EventType: Subscribe,
 				Data:      "foo",
 			}
-			encoded, err := encoder.EncodeMsg(-1, -1, iexMsg)
+			encoded, err := encoder.EncodeMessage(-1, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -87,7 +87,7 @@ func TestWebsocketEncoding(t *testing.T) {
 				EventType: Subscribe,
 				Data:      "foo",
 			}
-			encoded, err := encoder.EncodeMsg(4, -1, iexMsg)
+			encoded, err := encoder.EncodeMessage(4, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -100,7 +100,7 @@ func TestWebsocketEncoding(t *testing.T) {
 				EventType: Subscribe,
 				Data:      "foo",
 			}
-			encoded, err := encoder.EncodeMsg(4, 2, iexMsg)
+			encoded, err := encoder.EncodeMessage(4, 2, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -142,7 +142,7 @@ func TestHTTPEncoding(t *testing.T) {
 				EventType: Subscribe,
 				Data:      string(encoding),
 			}
-			encoded, err := encoder.EncodeMsg(-1, -1, iexMsg)
+			encoded, err := encoder.EncodeMessage(-1, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -155,7 +155,7 @@ func TestHTTPEncoding(t *testing.T) {
 				EventType: Subscribe,
 				Data:      "foo",
 			}
-			encoded, err := encoder.EncodeMsg(-1, -1, iexMsg)
+			encoded, err := encoder.EncodeMessage(-1, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -167,7 +167,7 @@ func TestHTTPEncoding(t *testing.T) {
 				EventType: Subscribe,
 				Data:      "foo",
 			}
-			encoded, err := encoder.EncodeMsg(-1, -1, iexMsg)
+			encoded, err := encoder.EncodeMessage(-1, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -180,7 +180,7 @@ func TestHTTPEncoding(t *testing.T) {
 				EventType: Subscribe,
 				Data:      "foo",
 			}
-			encoded, err := encoder.EncodeMsg(4, -1, iexMsg)
+			encoded, err := encoder.EncodeMessage(4, -1, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)
@@ -193,7 +193,7 @@ func TestHTTPEncoding(t *testing.T) {
 				EventType: Subscribe,
 				Data:      "foo",
 			}
-			encoded, err := encoder.EncodeMsg(4, 2, iexMsg)
+			encoded, err := encoder.EncodeMessage(4, 2, iexMsg)
 			So(err, ShouldBeNil)
 			val, err := ioutil.ReadAll(encoded)
 			So(err, ShouldBeNil)

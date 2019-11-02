@@ -47,32 +47,45 @@ type message struct {
 
 type fakeConn struct {
 	sync.Mutex
-	readChan        chan []byte
+	cond            *sync.Cond
+	incomingMessage []byte
 	messagesWritten [][]byte
 	closed          bool
-	closedChan      chan bool
 }
 
-func emptyConn() *fakeConn {
-	return &fakeConn{
-		readChan:   make(chan []byte),
-		closedChan: make(chan bool),
+func newFakeConn() *fakeConn {
+	conn := &fakeConn{
+		messagesWritten: make([][]byte, 0),
+		closed:          false,
 	}
+	conn.cond = sync.NewCond(conn)
+	return conn
 }
 
-func conn(readChan chan []byte) *fakeConn {
-	return &fakeConn{
-		readChan:   readChan,
-		closedChan: make(chan bool),
+// Calling with nil will set incomingMessage to nil, which will cause
+// ReadMessage to return io.EOF.
+func (f *fakeConn) SetIncomingMessage(msg []byte) {
+	f.Lock()
+	if msg == nil {
+		f.incomingMessage = nil
+	} else {
+		f.incomingMessage = make([]byte, len(msg))
+		copy(f.incomingMessage, msg)
 	}
+	f.Unlock()
+	f.cond.Signal()
 }
 
 func (f *fakeConn) ReadMessage() (int, []byte, error) {
-	v, ok := <-f.readChan
-	if ok {
-		return len(v), v, nil
+	f.Lock()
+	f.cond.Wait()
+	defer f.Unlock()
+	if f.incomingMessage == nil {
+		return 0, nil, io.EOF
 	}
-	return 0, nil, io.EOF
+	toReturn := make([]byte, len(f.incomingMessage))
+	copy(toReturn, f.incomingMessage)
+	return len(toReturn), toReturn, nil
 }
 
 func (f *fakeConn) WriteMessage(messageType int, data []byte) error {
@@ -83,8 +96,9 @@ func (f *fakeConn) WriteMessage(messageType int, data []byte) error {
 }
 
 func (f *fakeConn) Close() error {
+	f.Lock()
+	defer f.Unlock()
 	f.closed = true
-	f.closedChan <- true
 	return nil
 }
 
@@ -125,7 +139,7 @@ func TestTransport(t *testing.T) {
 			requests := make([]*http.Request, 0)
 			responses := make([]*response, 0)
 			fdc := &fakeDoClient{requests, responses, 0}
-			fc := emptyConn()
+			fc := newFakeConn()
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
@@ -144,7 +158,7 @@ func TestTransport(t *testing.T) {
 			hsResponse := &response{nil, &fakeError{"No connection"}}
 			responses := []*response{hsResponse}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fc := emptyConn()
+			fc := newFakeConn()
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
@@ -162,7 +176,7 @@ func TestTransport(t *testing.T) {
 				resp: hsResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fc := emptyConn()
+			fc := newFakeConn()
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
@@ -186,7 +200,7 @@ func TestTransport(t *testing.T) {
 				resp: nspResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fc := emptyConn()
+			fc := newFakeConn()
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
@@ -235,7 +249,7 @@ func TestTransport(t *testing.T) {
 				resp: nspResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fc := emptyConn()
+			fc := newFakeConn()
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
@@ -262,8 +276,6 @@ func TestTransport(t *testing.T) {
 
 			trans.Close()
 
-			<-fc.closedChan
-
 			fc.Lock()
 			msgs = fc.messagesWritten
 			So(len(fc.messagesWritten), ShouldEqual, 4)
@@ -287,7 +299,7 @@ func TestTransport(t *testing.T) {
 				resp: nspResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fc := emptyConn()
+			fc := newFakeConn()
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
@@ -298,7 +310,7 @@ func TestTransport(t *testing.T) {
 			So(err.Error(), ShouldContainSubstring,
 				"Cannot write to a closed transport")
 		})
-		Convey("prevent reading from a closed transport", func() {
+		Convey("prevent adding callbacks to closed transports", func() {
 			requests := make([]*http.Request, 0)
 			hsResponse := &http.Response{
 				Body: ioutil.NopCloser(
@@ -314,16 +326,44 @@ func TestTransport(t *testing.T) {
 				resp: nspResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fc := emptyConn()
+			fc := newFakeConn()
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
 			trans, err := NewTransport(fdc, fw)
 			trans.Close()
-			_, err = trans.GetReadChannel()
+			handler := func(pkt PacketData) {}
+			_, err = trans.AddPacketCallback("/1.0/tops", handler)
 			So(err, ShouldNotBeNil)
 			So(err.Error(), ShouldContainSubstring,
-				"Cannot read from a closed transport")
+				"Cannot add a callback")
+		})
+		Convey("prevent removing callbacks to closed transports", func() {
+			requests := make([]*http.Request, 0)
+			hsResponse := &http.Response{
+				Body: ioutil.NopCloser(
+					strings.NewReader(hsResponseString)),
+			}
+			nspResponse := &http.Response{
+				Body: ioutil.NopCloser(
+					strings.NewReader(goodJoinResponse)),
+			}
+			responses := []*response{&response{
+				resp: hsResponse,
+			}, &response{
+				resp: nspResponse,
+			}}
+			fdc := &fakeDoClient{requests, responses, 0}
+			fc := newFakeConn()
+			fw := &fakeWsDialer{
+				conn: fc,
+			}
+			trans, err := NewTransport(fdc, fw)
+			trans.Close()
+			err = trans.RemovePacketCallback("/1.0/tops", 1)
+			So(err, ShouldNotBeNil)
+			So(err.Error(), ShouldContainSubstring,
+				"Cannot remove a callback")
 		})
 		Convey("successfully write from multiple threads", func() {
 			requests := make([]*http.Request, 0)
@@ -344,7 +384,7 @@ func TestTransport(t *testing.T) {
 				resp: nspResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			fc := emptyConn()
+			fc := newFakeConn()
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
@@ -368,7 +408,6 @@ func TestTransport(t *testing.T) {
 			}
 			wg.Wait()
 			trans.Close()
-			<-fc.closedChan
 
 			fc.Lock()
 			So(fc.messagesWritten, ShouldHaveLength, 22)
@@ -394,30 +433,112 @@ func TestTransport(t *testing.T) {
 				resp: nspResponse,
 			}}
 			fdc := &fakeDoClient{requests, responses, 0}
-			readChan := make(chan []byte, 10)
-			fc := conn(readChan)
+			fc := newFakeConn()
 			fw := &fakeWsDialer{
 				conn: fc,
 			}
 			trans, err := NewTransport(fdc, fw)
+
+			received := make([]PacketData, 0)
+			receivedLock := &sync.Mutex{}
+			receivedCond := sync.NewCond(receivedLock)
+			handler := func(pkt PacketData) {
+				receivedLock.Lock()
+				received = append(received, pkt)
+				receivedLock.Unlock()
+				receivedCond.Signal()
+			}
 			So(err, ShouldBeNil)
-			rc1, err := trans.GetReadChannel()
+			_, err = trans.AddPacketCallback("/1.0/last", handler)
 			So(err, ShouldBeNil)
-			rc2, err := trans.GetReadChannel()
+			_, err = trans.AddPacketCallback("/1.0/last", handler)
 			So(err, ShouldBeNil)
-			rc3, err := trans.GetReadChannel()
+			_, err = trans.AddPacketCallback("/1.0/last", handler)
 			So(err, ShouldBeNil)
 			message := []byte("42/1.0/last,[\"some\":\"data\"]")
-			fc.readChan <- message
+			fc.SetIncomingMessage(message)
 			expected := PacketData{
 				PacketType:  Message,
 				MessageType: Event,
 				Namespace:   "/1.0/last",
 				Data:        "[\"some\":\"data\"]",
 			}
-			So(<-rc1, ShouldResemble, expected)
-			So(<-rc2, ShouldResemble, expected)
-			So(<-rc3, ShouldResemble, expected)
+			for {
+				receivedLock.Lock()
+				if len(received) < 3 {
+					receivedCond.Wait()
+				} else {
+					receivedLock.Unlock()
+					break
+				}
+				receivedLock.Unlock()
+
+			}
+			So(received[0], ShouldResemble, expected)
+			So(received[1], ShouldResemble, expected)
+			So(received[2], ShouldResemble, expected)
+		})
+		Convey("successfully remove callbacks", func() {
+			requests := make([]*http.Request, 0)
+			hsResponse := &http.Response{
+				Body: ioutil.NopCloser(
+					strings.NewReader(hsResponseString)),
+			}
+			nspResponse := &http.Response{
+				Body: ioutil.NopCloser(
+					strings.NewReader(goodJoinResponse)),
+			}
+			responses := []*response{&response{
+				resp: hsResponse,
+			}, &response{
+				resp: nspResponse,
+			}}
+			fdc := &fakeDoClient{requests, responses, 0}
+			fc := newFakeConn()
+			fw := &fakeWsDialer{
+				conn: fc,
+			}
+			trans, err := NewTransport(fdc, fw)
+
+			received := make([]PacketData, 0)
+			receivedLock := &sync.Mutex{}
+			receivedCond := sync.NewCond(receivedLock)
+			handler := func(pkt PacketData) {
+				receivedLock.Lock()
+				received = append(received, pkt)
+				receivedLock.Unlock()
+				receivedCond.Signal()
+			}
+			So(err, ShouldBeNil)
+			_, err = trans.AddPacketCallback("/1.0/last", handler)
+			So(err, ShouldBeNil)
+			_, err = trans.AddPacketCallback("/1.0/last", handler)
+			So(err, ShouldBeNil)
+			id3, err := trans.AddPacketCallback("/1.0/last", handler)
+			So(err, ShouldBeNil)
+			err = trans.RemovePacketCallback("/1.0/last", id3)
+			So(err, ShouldBeNil)
+			message := []byte("42/1.0/last,[\"some\":\"data\"]")
+			fc.SetIncomingMessage(message)
+			expected := PacketData{
+				PacketType:  Message,
+				MessageType: Event,
+				Namespace:   "/1.0/last",
+				Data:        "[\"some\":\"data\"]",
+			}
+			for {
+				receivedLock.Lock()
+				if len(received) < 2 {
+					receivedCond.Wait()
+				} else {
+					receivedLock.Unlock()
+					break
+				}
+				receivedLock.Unlock()
+
+			}
+			So(received[0], ShouldResemble, expected)
+			So(received[1], ShouldResemble, expected)
 		})
 	})
 }

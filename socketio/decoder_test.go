@@ -101,7 +101,15 @@ func TestSuccessfulDecoding(t *testing.T) {
 				&fakeDataWithTypes{"baz", []int{4, 6},
 					2, 4, "/1.0/tops"})
 		})
-
+		Convey("should parse json array messages", func() {
+			data := "[\"message\", \"{\\\"symbol\\\":\\\"fb\\\"}\"]"
+			parsed := struct {
+				Symbol string
+			}{}
+			err := ParseToJSON(data, &parsed)
+			So(err, ShouldBeNil)
+			So(parsed.Symbol, ShouldEqual, "fb")
+		})
 	})
 }
 func TestSuccessfulDecodingMultipleMessages(t *testing.T) {
