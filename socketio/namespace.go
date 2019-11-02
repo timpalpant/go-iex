@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/cheekybits/genny/generic"
@@ -100,7 +101,15 @@ func (i *IEXMsgTypeNamespace) fanout(pkt PacketData) {
 	i.RLock()
 	defer i.RUnlock()
 	for _, sub := range i.subscriptions {
-		if _, ok := sub.Symbols[(symbol.Symbol)]; ok {
+		if glog.V(5) {
+			glog.Infof("Checking for subscription to %s",
+				symbol.Symbol)
+		}
+		if _, ok := sub.Symbols[symbol.Symbol]; ok {
+			if glog.V(5) {
+				glog.Infof("Calling subscription to %s",
+					symbol.Symbol)
+			}
 			sub.Callback(decoded)
 		}
 	}
@@ -161,6 +170,7 @@ func (i *IEXMsgTypeNamespace) SubscribeTo(
 	}
 	if len(symbols) > 0 {
 		for _, symbol := range symbols {
+			symbol = strings.ToUpper(symbol)
 			newSub.Symbols[symbol] = struct{}{}
 			i.symbols.Subscribe(symbol)
 		}

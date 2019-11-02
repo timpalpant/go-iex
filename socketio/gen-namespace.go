@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/golang/glog"
@@ -101,7 +102,11 @@ func (i *IexTOPSNamespace) fanout(pkt PacketData) {
 	i.RLock()
 	defer i.RUnlock()
 	for _, sub := range i.subscriptions {
-		if _, ok := sub.Symbols[(symbol.Symbol)]; ok {
+		if glog.V(5) {
+			glog.Infof("Checking for subscription to %s",
+				symbol.Symbol)
+		}
+		if _, ok := sub.Symbols[symbol.Symbol]; ok {
 			sub.Callback(decoded)
 		}
 	}
@@ -162,6 +167,7 @@ func (i *IexTOPSNamespace) SubscribeTo(
 	}
 	if len(symbols) > 0 {
 		for _, symbol := range symbols {
+			symbol = strings.ToUpper(symbol)
 			newSub.Symbols[symbol] = struct{}{}
 			i.symbols.Subscribe(symbol)
 		}
@@ -281,7 +287,11 @@ func (i *IexLastNamespace) fanout(pkt PacketData) {
 	i.RLock()
 	defer i.RUnlock()
 	for _, sub := range i.subscriptions {
-		if _, ok := sub.Symbols[(symbol.Symbol)]; ok {
+		if glog.V(5) {
+			glog.Infof("Checking for subscription to %s",
+				symbol.Symbol)
+		}
+		if _, ok := sub.Symbols[symbol.Symbol]; ok {
 			sub.Callback(decoded)
 		}
 	}
@@ -342,6 +352,7 @@ func (i *IexLastNamespace) SubscribeTo(
 	}
 	if len(symbols) > 0 {
 		for _, symbol := range symbols {
+			symbol = strings.ToUpper(symbol)
 			newSub.Symbols[symbol] = struct{}{}
 			i.symbols.Subscribe(symbol)
 		}
@@ -461,7 +472,11 @@ func (i *IexDEEPNamespace) fanout(pkt PacketData) {
 	i.RLock()
 	defer i.RUnlock()
 	for _, sub := range i.subscriptions {
-		if _, ok := sub.Symbols[(symbol.Symbol)]; ok {
+		if glog.V(5) {
+			glog.Infof("Checking for subscription to %s",
+				symbol.Symbol)
+		}
+		if _, ok := sub.Symbols[symbol.Symbol]; ok {
 			sub.Callback(decoded)
 		}
 	}
@@ -522,6 +537,7 @@ func (i *IexDEEPNamespace) SubscribeTo(
 	}
 	if len(symbols) > 0 {
 		for _, symbol := range symbols {
+			symbol = strings.ToUpper(symbol)
 			newSub.Symbols[symbol] = struct{}{}
 			i.symbols.Subscribe(symbol)
 		}
